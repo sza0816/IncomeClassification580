@@ -1,0 +1,158 @@
+---
+title: "580Project"
+author: "Zian Shang"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r}
+# include packages
+
+```
+
+
+```{r}
+# read train.data
+train.data <- read.csv("/Users/zianshang/Downloads/AMS\ 580/group\ project\ 580/train.csv", 
+                       header = T, 
+                       na.strings = " ?")
+
+# remove NA
+train.data <- na.omit(train.data)
+
+# remove empty space in front of each char cell
+# factorize char columns
+
+# ***if needed, encoding char cells instead of factorizing them***
+
+train.data[] <- lapply(train.data, 
+                       function(x) {
+                         if(is.character(x)) 
+                           as.factor(trimws(x))
+                         else x
+                       })
+
+View(train.data)
+str(train.data)
+```
+
+
+### variable selection, identify important features
+
+correlation analysis-> 1 person
+
+feature importance scores -> 1 person
+
+dimensionality reduction techniques -> 1 person
+
+
+###
+tree-based models -> use education(categorical, factorized)
+```{r}
+train.data.1 <- subset(train.data, select = -c(education.num))
+```
+
+###
+logistic, linear, NN models -> use education.num(numeric, original)
+```{r}
+train.data.2 <- subset(train.data, select = -c(education))
+```
+
+*** remember to optimize model parameters***
+
+### model 1: linear model -> 1 person
+data scaling
+
+### model 2: multiple linear model -> 1 person
+data scaling
+
+### model 3: logistic model -> 1 person
+data scaling
+
+### model 4: NN model -> 1 person
+data scaling
+
+### model 5: CART model -> 1 person
+do not scale
+
+### model 6: random forest model -> 1 person
+do not scale
+
+### model 7: extra models, PCA, KNN... -> decide latter
+
+
+
+
+
+```{r}
+# check for data imbalance
+table(df$income)
+prop.table(table(df$income))
+# somewhat imbalanced
+```
+
+### ***if model predicts income>50K poorly, try handle imbalance***
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# read test data
+test.data <-read.csv("/Users/zianshang/Downloads/AMS\ 580/group\ project\ 580/test.csv", 
+                     header = T, 
+                     na.strings = " ?")
+
+# remove NA
+test.data <- na.omit(test.data)
+
+# remove empty space in front of each char cell
+# ***if needed, factorize/encode char cells***
+test.data[] <- lapply(test.data, 
+                       function(x) {
+                         if(is.character(x)) trimws(x) else x
+                       })
+
+
+
+View(test.data)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
