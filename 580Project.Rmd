@@ -12,7 +12,7 @@ output: pdf_document
 
 ```{r}
 # read train.data
-train.data <- read.csv("/Users/thomashuang/Downloads/IncomeClassification580-main/train.csv",
+train.data <- read.csv("train.csv",
                        header = T, 
                        na.strings = " ?")
 
@@ -35,7 +35,7 @@ str(train.data)
 
 ```{r}
 # read test data
-test.data <-read.csv("/Users/thomashuang/Downloads/IncomeClassification580-main/test.csv", 
+test.data <-read.csv("test.csv", 
                      header = T, 
                      na.strings = " ?")
 
@@ -210,25 +210,3 @@ prop.table(table(train.data$income))
 
 ### ***if model predicts income\>50K poorly, try handle imbalance***
 
-```{r}
-# read test data
-test.data <-read.csv("/Users/thomashuang/Downloads/IncomeClassification580-main/train.csv", 
-                     header = T, 
-                     na.strings = " ?")
-
-# remove NA
-test.data <- na.omit(test.data)
-
-# remove empty space in front of each char cell
-# ***if needed, factorize/encode char cells***
-test.data[] <- lapply(test.data, 
-                       function(x) {
-                         if(is.character(x)) trimws(x) else x
-                       })
-```
-
-#### this line is used to test push to remove self branch & merge data to remove main branch
-
-nicki testing 2
-
-Matt test
