@@ -88,8 +88,8 @@ do not scale
 
 ```{r}
 # check for data imbalance
-table(df$income)
-prop.table(table(df$income))
+table(train.data$income)
+prop.table(table(train.data$income))
 # somewhat imbalanced
 ```
 
@@ -123,19 +123,8 @@ test.data[] <- lapply(test.data,
                        })
 
 
-View(test.data) # tasfia's comment check
+# View(test.data) 
 ```
-
-
-
-
-
-#### this line is used to test push to remove self branch & merge data to remove main branch ####
-
-
-
-nicki testing 2
-
 
 
 
