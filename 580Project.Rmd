@@ -13,7 +13,7 @@ output: pdf_document
 
 ```{r}
 # read train.data
-train.data <- read.csv("/Users/zianshang/Downloads/AMS\ 580/group\ project\ 580/train.csv", 
+train.data <- read.csv("train.csv", 
                        header = T, 
                        na.strings = " ?")
 
@@ -32,7 +32,7 @@ train.data[] <- lapply(train.data,
                          else x
                        })
 
-View(train.data)
+# View(train.data)
 str(train.data)
 ```
 
@@ -44,6 +44,7 @@ correlation analysis-> Tasfia
 feature importance scores -> random forest
 
 dimensionality reduction techniques -> Zian
+Multicollinearity, PCA Variance
 
 outliers -> Matthew
 
@@ -107,7 +108,7 @@ prop.table(table(df$income))
 
 ```{r}
 # read test data
-test.data <-read.csv("/Users/zianshang/Downloads/AMS\ 580/group\ project\ 580/test.csv", 
+test.data <-read.csv("test.csv", 
                      header = T, 
                      na.strings = " ?")
 
@@ -120,7 +121,6 @@ test.data[] <- lapply(test.data,
                        function(x) {
                          if(is.character(x)) trimws(x) else x
                        })
-
 
 
 View(test.data) # tasfia's comment check
