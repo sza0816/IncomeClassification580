@@ -13,7 +13,7 @@ output: pdf_document
 
 ```{r}
 # read train.data
-train.data <- read.csv("/Users/zianshang/Downloads/AMS\ 580/group\ project\ 580/train.csv", 
+train.data <- read.csv("train.csv", 
                        header = T, 
                        na.strings = " ?")
 
@@ -40,8 +40,54 @@ str(train.data)
 ### variable selection, identify important features
 
 correlation analysis-> Tasfia
+``` {r}
+library(caret)
 
-feature importance scores -> random forest
+# Subset only numeric predictors
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+numeric_vars <- setdiff(numeric_vars, "income_bin")  # remove target variable
+
+numeric_data <- train.data[, numeric_vars]
+
+# Compute correlation matrix
+cor_matrix <- cor(numeric_data)
+cor_matrix
+```
+
+``` {r}
+# Display eat map
+library(corrplot)
+corrplot(cor_matrix, method = "color", type = "upper", tl.cex = 0.8)
+```
+
+Feature importance scores using random forest:
+``` {r}
+# Load library
+library(randomForest)
+
+# Make sure the target is a factor
+train.data$income <- as.factor(train.data$income)
+
+# Train the Random Forest model
+set.seed(123)
+rf_model <- randomForest(income ~ ., data = train.data, importance = TRUE, ntree = 500)
+
+# Extract importance scores
+importance_df <- as.data.frame(importance(rf_model))
+
+# Add variable names as a column
+importance_df$Variable <- rownames(importance_df)
+
+# Reorder columns for clarity
+importance_df <- importance_df[, c("Variable", "MeanDecreaseAccuracy", "MeanDecreaseGini")]
+
+# Sort by MeanDecreaseGini (most commonly used)
+importance_df <- importance_df[order(-importance_df$MeanDecreaseGini), ]
+
+# Print the result
+print(importance_df)
+```
+The Random Forest model identified relationship, marital.status, and capital.gain to play a critical role in the model's ability to differentiate between high and low income classes.
 
 dimensionality reduction techniques -> Zian
 
@@ -123,20 +169,13 @@ test.data[] <- lapply(test.data,
 
 
 
-View(test.data) # tasfia's comment check
+View(test.data) 
 ```
-
-
-
 
 
 #### this line is used to test push to remove self branch & merge data to remove main branch ####
 
 
-
-nicki testing 2
-
-edit testing blah blah
 
 
 
