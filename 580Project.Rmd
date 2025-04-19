@@ -18,6 +18,8 @@ library(nnet)
 library(rpart)
 library(rpart.plot)
 library(xgboost)
+library(MASS)
+library(pROC)
 ```
 
 
@@ -363,7 +365,49 @@ rm(y, yhat, yhat_binary, mse_mlr, accuracy_mlr, pred_mlr)
 
 
 ### model 2: logistic model -> Zian
-data scaling
+```{r}
+# build full model
+lr_model0 <- glm(income~. , data = train.data.2, family = binomial)
+# summary(lr_model0)
+# race, sex_Male, occupation_Craft-repair seemed to be not significant
+
+# step-wise variable selection, both direction
+suppressWarnings({
+  lr_model <- stepAIC(lr_model0, k = log(nrow(train.data.2)), trace = 0, direction = "both")
+})
+summary(lr_model)
+```
+
+```{r}
+# predict test data, obtain confusion matrix
+probs <- lr_model %>% predict(newdata = test.data.2, type = "response")
+pred.income <- ifelse(probs > 0.5,  1, 0)
+
+confusionMatrix(factor(pred.income), factor(test.data.2$income), positive = "1")
+```
+
+
+```{r}
+y_true <- test.data.2$income
+y_pred <- pred.income
+y_prob <- probs
+
+# AUC
+roc_obj <- roc(y_true, y_prob)
+auc_val <- auc(roc_obj)
+cat("AUC:", auc_val, "\n")
+
+# precision
+precision <- posPredValue(factor(y_pred), factor(y_true), positive = "1")
+cat("precision:", precision, "\n")
+# F1 score
+recall <- sensitivity(factor(y_pred), factor(y_true), positive = "1")
+cat("recall/sensitivity:", recall, "\n")
+f1_score <- 2 * precision * recall / (precision + recall)
+cat("F1 Score:", f1_score, "\n")
+```
+
+
 
 ### model 3: NN model -> Tasfia
 data scaling
