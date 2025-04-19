@@ -7,7 +7,14 @@ output: pdf_document
 
 ```{r}
 # include packages
-
+library(tidyverse)
+library(caret)
+library(corrplot)
+library(randomForest)
+library(nnet)
+library(rpart)
+library(rpart.plot)
+library(xgboost)
 ```
 
 
@@ -15,7 +22,12 @@ output: pdf_document
 # read train.data
 train.data <- read.csv("train.csv", 
                        header = T, 
-                       na.strings = " ?")
+                       na.strings = " ?") 
+
+# check for NA
+colSums(is.na(train.data))
+
+###### should we impute instead of remove NA?
 
 # remove NA
 train.data <- na.omit(train.data)
@@ -31,8 +43,7 @@ train.data[] <- lapply(train.data,
                            as.factor(trimws(x))
                          else x
                        })
-
-View(train.data)
+view(train.data)
 str(train.data)
 ```
 
@@ -41,22 +52,21 @@ str(train.data)
 
 correlation analysis-> Tasfia
 ``` {r}
-library(caret)
-
 # Subset only numeric predictors
 numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
-numeric_vars <- setdiff(numeric_vars, "income_bin")  # remove target variable
+numeric_vars
+```
 
 numeric_data <- train.data[, numeric_vars]
 
-# Compute correlation matrix
+``` {r}
+Compute correlation matrix
 cor_matrix <- cor(numeric_data)
 cor_matrix
 ```
 
 ``` {r}
-# Display eat map
-library(corrplot)
+# Display heat map
 corrplot(cor_matrix, method = "color", type = "upper", tl.cex = 0.8)
 ```
 
@@ -153,7 +163,7 @@ prop.table(table(df$income))
 
 ```{r}
 # read test data
-test.data <-read.csv("/Users/zianshang/Downloads/AMS\ 580/group\ project\ 580/test.csv", 
+test.data <-read.csv("test.csv", 
                      header = T, 
                      na.strings = " ?")
 
