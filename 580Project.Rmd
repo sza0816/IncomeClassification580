@@ -7,7 +7,7 @@ output: pdf_document
 
 ```{r}
 # include packages
-
+library(caret)
 ```
 
 ```{r}
@@ -83,19 +83,21 @@ train.data.2 <- subset(train.data, select = -c(education))
 
 ### model 1: multiple linear model -\> Thomas
 
+**\*I made a copy of the testing data and training data, I will delete the copy at the end of the analysis**
+
 #### Drop education column in train and test
 
 ```{r}
-#prep
-train.data.3 <- subset(train.data, select = -c(education))
-test.data <- subset(test.data, select = -c(education))
+#make a copy of the train.data.2 and test.data
+train.data.2_copy <- subset(train.data, select = -c(education))
+test.data.2_copy <- subset(test.data, select = -c(education))
 ```
 
 #### Convert income column to numeric
 
 ```{r}
-train.data.3$income <- as.numeric(ifelse(train.data.3$income == ">50K","1","0"))
-test.data$income <- as.numeric(ifelse(test.data$income == ">50K","1","0"))
+train.data.2_copy$income <- as.numeric(ifelse(train.data.2_copy$income == ">50K","1","0"))
+test.data.2_copy$income <- as.numeric(ifelse(test.data.2_copy$income == ">50K","1","0"))
 ```
 
 #### Scale train data (numeric column only)
@@ -103,10 +105,10 @@ test.data$income <- as.numeric(ifelse(test.data$income == ">50K","1","0"))
 ```{r}
 #for train data
 #Separate numeric predictors (exclude income) and categorical columns
-numeric_predictors <- train.data.3[, sapply(train.data.3, is.numeric) & names(train.data.3) != "income"]
-categorical_data <- train.data.3[sapply(train.data.3, is.factor)]
+numeric_predictors <- train.data.2_copy[, sapply(train.data.2_copy, is.numeric) & names(train.data.2_copy) != "income"]
+categorical_data <- train.data.2_copy[sapply(train.data.2_copy, is.factor)]
 #store income
-income <- train.data.3$income  # Keep income unscaled
+income <- train.data.2_copy$income  # Keep income unscaled
 
 # Apply scale to numeric part
 # Scale numeric predictors
@@ -115,8 +117,8 @@ train_means <- sapply(numeric_predictors, mean)
 train_sds <- sapply(numeric_predictors, sd)
 
 # Combine scaled numeric data with categorical columns
-train.data.3 <- cbind(scaled_numeric, categorical_data, income)
-head(train.data.3)
+train.data.2_copy <- cbind(scaled_numeric, categorical_data, income)
+head(train.data.2_copy)
 ```
 
 #### Scale test data (numeric column only)
@@ -124,8 +126,8 @@ head(train.data.3)
 ```{r}
 # for test data
 # Separate numeric predictors (exclude income) and categorical columns
-numeric_predictors <- test.data[, sapply(test.data, is.numeric) & names(test.data) != "income"]
-categorical_data <- test.data[sapply(test.data, is.factor)]
+numeric_predictors <- test.data.2_copy[, sapply(test.data.2_copy, is.numeric) & names(test.data.2_copy) != "income"]
+categorical_data <- test.data.2_copy[sapply(test.data.2_copy, is.factor)]
 
 # Apply scale to numeric part of the test.data with train_means, train_sds
 scaled_test_numeric <- as.data.frame(
@@ -133,29 +135,29 @@ scaled_test_numeric <- as.data.frame(
 )
 
 # Combine scaled numeric data with categorical columns
-test.data <- cbind(scaled_test_numeric, categorical_data, income = test.data$income)
-head(test.data)
+test.data.2_copy <- cbind(scaled_test_numeric, categorical_data, income = test.data.2_copy$income)
+head(test.data.2_copy)
 ```
 
 #### Fit Multiple Linear Regression Model
 
 ```{r}
 #fit mlr
-mlr_model <- lm(income ~ ., data = train.data.3)
+mlr_model <- lm(income ~ ., data = train.data.2_copy)
 ```
 
 #### Prediction
 
 ```{r}
 #prediction
-pred_mlr <- predict(mlr_model, test.data)
+pred_mlr <- predict(mlr_model, test.data.2_copy)
 ```
 
-#### Find Y and \hat{Y}
+#### Find Y and Y_hat
 
 ```{r}
 # Evaluate (no descaling needed since income is unscaled)
-y <- test.data$income
+y <- test.data.2_copy$income
 yhat <- pred_mlr
 ```
 
@@ -179,6 +181,32 @@ print(paste("MLR MSE:", mse_mlr))
 # Accuracy
 accuracy_mlr <- mean(y == yhat_binary)
 print(paste("MLR Accuracy:", accuracy_mlr))
+```
+
+#### Confusion Matrix
+
+```{r}
+cm_mlr <- confusionMatrix(factor(yhat_binary), factor(y), positive = "1")
+cm_mlr
+```
+
+#### Remove temporary variables
+
+```{r}
+# rm(
+#   yhat,
+#   accuracy_mlr,
+#   mse_mlr,
+#   yhat_binary,
+#   y,
+#   test.data.2_copy,
+#   scaled_test_numeric,
+#   categorical_data,
+#   numeric_predictors,
+#   train.data.2_copy,
+#   pred_mlr,
+#   mlr_model,
+# )
 ```
 
 ### model 2: logistic model -\> Zian
@@ -209,4 +237,3 @@ prop.table(table(train.data$income))
 ```
 
 ### ***if model predicts income\>50K poorly, try handle imbalance***
-
