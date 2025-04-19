@@ -7,7 +7,7 @@ output: pdf_document
 
 ```{r}
 # include packages
-
+library(fastDummies)
 ```
 
 
@@ -37,6 +37,27 @@ str(train.data)
 ```
 
 
+```{r}
+# read test data
+test.data <-read.csv("test.csv", 
+                     header = T, 
+                     na.strings = " ?")
+
+# remove NA
+test.data <- na.omit(test.data)
+
+# remove empty space in front of each char cell
+# ***if needed, factorize/encode char cells***
+test.data[] <- lapply(test.data, 
+                       function(x) {
+                         if(is.character(x)) trimws(x) else x
+                       })
+
+
+# View(test.data) 
+```
+
+
 ### variable selection, identify important features
 
 correlation analysis-> Tasfia
@@ -45,25 +66,114 @@ feature importance scores -> random forest
 
 dimensionality reduction techniques -> Zian
 Multicollinearity, PCA Variance
+```{r}
+
+```
+
 
 outliers -> Matthew
 
 
 ###
-tree-based models -> use education(categorical, factorized)
+tree-based models (CART, RF, XGBoost)
 ```{r}
+# -> use education(categorical, factorized)
+# -> no scaling
+# -> no dummy encoding
+
+### NOTE: ### Tree-based models can natively handle categorical variables (factors).
+# Therefore, we keep the original 'education' factor variable and remove 'education.num'.
+# No scaling or dummy encoding is needed for these models.
+
 train.data.1 <- subset(train.data, select = -c(education.num))
+test.data.1 <- subset(test.data, select = -c(education.num))
+
+# identical(names(train.data.1), names(test.data.1))        # true
 ```
 
 ###
-logistic, linear, NN models -> use education.num(numeric, original)
+Linear/Logistic/NN/KNN 
 ```{r}
+# -> use education.num(numeric, original)
+# -> scaling
+# -> dummy encode all categorical variables
+
+
+### preprocess train.data
 train.data.2 <- subset(train.data, select = -c(education))
+
+# obtain numeric column names
+num_cols <- names(train.data.2)[sapply(train.data.2, is.numeric)]
+num_cols <- num_cols[num_cols != "education.num"]
+
+# scale numeric data
+scaled_data <- scale(train.data.2[, num_cols])
+train.data.2[, num_cols] <- scaled_data
+
+# obtain means & stds for KNN
+means <- attr(scaled_data, "scaled:center")
+sds   <- attr(scaled_data, "scaled:scale")
+
+# dummy encode all categorical variables
+### note: it is normal that there are more columns being created ###
+train.data.2 <- dummy_cols(
+  train.data.2,
+  select_columns = c("workclass", "marital.status", "occupation", "relationship", 
+                     "race", "sex", "native.country"),
+  remove_first_dummy = TRUE,
+  remove_selected_columns = TRUE
+)
+
+# -------------------------------------------------------------------------------
+
+### preprocess test.data in the same way
+test.data.2 <- subset(test.data, select = -c(education))
+
+# num_cols are the same
+
+# scale test data using means & stds from the train data
+test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, means, "-")
+test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, sds, "/")
+
+# dummy encode all categorical variables
+test.data.2 <- dummy_cols(
+  test.data.2,
+  select_columns = c("workclass", "marital.status", "occupation", "relationship",
+                     "race", "sex", "native.country"),
+  remove_first_dummy = TRUE,
+  remove_selected_columns = TRUE
+)
+
+# check missing columns 
+# setdiff(names(train.data.2), names(test.data.2))
+
+### NOTE: ### The level "Holand-Netherlands" appeared in the training set but 
+# not in the test set, so dummy encoding did not create this column in the test data.
+# We manually add the missing dummy variable and set it to 0 for all rows.
+test.data.2[["native.country_Holand-Netherlands"]] <- 0
+
+
+### NOTE: ### Check if the column names of train and test datasets are identical.
+# Model prediction requires the exact same column order, so we align test data 
+# columns to match the training set.
+identical(names(train.data.2), names(test.data.2))      # false
+test.data.2 <- test.data.2[, names(train.data.2)]
 ```
+
+###
+PCA (if implementing)
+```{r}
+# -> remove all categorical variables
+# -> scaling
+train.data.3 <- train.data[, sapply(train.data, is.numeric)]
+train.data.3 <- scale(train.data.3)
+```
+
 
 *** remember to optimize model parameters***
 
 ### model 1: multiple linear model -> Thomas
+change target income column to 0/1
 data scaling
 
 ### model 2: logistic model -> Zian
@@ -94,37 +204,6 @@ prop.table(table(train.data$income))
 ```
 
 ### ***if model predicts income>50K poorly, try handle imbalance***
-
-
-
-
-
-
-
-
-
-
-
-
-```{r}
-# read test data
-test.data <-read.csv("test.csv", 
-                     header = T, 
-                     na.strings = " ?")
-
-# remove NA
-test.data <- na.omit(test.data)
-
-# remove empty space in front of each char cell
-# ***if needed, factorize/encode char cells***
-test.data[] <- lapply(test.data, 
-                       function(x) {
-                         if(is.character(x)) trimws(x) else x
-                       })
-
-
-# View(test.data) 
-```
 
 
 
