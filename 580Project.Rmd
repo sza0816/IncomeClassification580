@@ -91,20 +91,52 @@ cor_matrix <- cor(numeric_data)
 cor_matrix
 
 # Display heat map
-corrplot(cor_matrix, method = "color", type = "upper",
+# Display heat map
+corrplot(cor_matrix,
+         method = "color",
+         col = colorRampPalette(c("white", "lightpink", "deeppink4"))(10),
          tl.col = "black",
-         tl.srt = 45,
+         tl.cex = 0.9,
          addCoef.col = "black",
-         number.cex = 0.7, 
-         col = colorRampPalette(c("blue", "white", "red"))(200),
-         tl.cex = 0.8,
-         cl.cex = 0.8,
-         mar = c(0,0,1,0))
+         number.cex = 0.7)
 
 # no strong linear dependencies among numeric predictors (all |r| < 0.15), 
 # so no further variable removal due to multicollinearity is needed
 
 rm(numeric_vars, numeric_data, cor_matrix)
+```
+
+
+Correlation Matrix for Categorial Variables (just testing this out):
+```{r}
+# Select categorical columns
+cat_vars <- train.data[, sapply(train.data, is.factor)]
+
+# Function to compute Cramér's V matrix
+cramers_v_matrix <- function(df) {
+  vars <- names(df)
+  mat <- matrix(NA, ncol = length(vars), nrow = length(vars), 
+                dimnames = list(vars, vars))
+  for (i in vars) {
+    for (j in vars) {
+      tbl <- table(df[[i]], df[[j]])
+      mat[i, j] <- assocstats(tbl)$cramer
+    }
+  }
+  return(as.data.frame(mat))
+}
+
+cramers_v_df <- cramers_v_matrix(cat_vars)
+cramer_mat <- as.matrix(cramers_v_df)
+corrplot(cramer_mat,
+         method = "color",
+         col = colorRampPalette(c("white", "lightblue", "darkblue"))(200),
+         type = "full",
+         tl.col = "black",
+         tl.cex = 0.7,
+         na.label = " ",
+         addCoef.col = "black",
+         number.cex = 0.6)
 ```
 
 
