@@ -322,11 +322,14 @@ print(paste("MLR MSE:", mse_mlr))
 # Accuracy
 accuracy_mlr <- mean(y == yhat_binary)
 print(paste("MLR Accuracy:", accuracy_mlr))
+cat("\n")
 
-
+# -------------------------------------------------------------------------------
+cm_mlr <- confusionMatrix(factor(yhat_binary), factor(y), positive = "1")
+cm_mlr
 
 # remove temp variables
-rm(y, yhat, yhat_binary)
+rm(y, yhat, yhat_binary, mse_mlr, accuracy_mlr, pred_mlr)
 ```
 
 
