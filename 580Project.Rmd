@@ -8,6 +8,9 @@ output: pdf_document
 ```{r}
 # include packages
 library(fastDummies)
+library(caret)
+library(ggplot2)
+library(ggrepel)
 ```
 
 
@@ -33,7 +36,7 @@ train.data[] <- lapply(train.data,
                        })
 
 # View(train.data)
-str(train.data)
+# str(train.data)
 ```
 
 
@@ -50,28 +53,44 @@ test.data <- na.omit(test.data)
 # ***if needed, factorize/encode char cells***
 test.data[] <- lapply(test.data, 
                        function(x) {
-                         if(is.character(x)) trimws(x) else x
+                         if(is.character(x)) 
+                           as.factor(trimws(x))
+                         else x
                        })
 
 
 # View(test.data) 
+# str(test.data)
 ```
 
 
 ### variable selection, identify important features
 
+outliers -> Matthew
+```{r}
+
+```
+
 correlation analysis-> Tasfia
-
-feature importance scores -> random forest
-
-dimensionality reduction techniques -> Zian
-Multicollinearity, PCA Variance
 ```{r}
 
 ```
 
 
-outliers -> Matthew
+Variance Thresholding -> Zian
+```{r}
+# get all numeric features
+numeric.data <- train.data[, sapply(train.data, is.numeric)]
+
+# look for numbers of columns with variance near 0
+nzv <- nearZeroVar(numeric.data)
+
+# display low variance columns
+# head(numeric.data[, nzv]) 
+
+### NOTE: ### 'capital.gain'& 'capital.loss' are mostly 0's but have some very large values.
+# They are classic long-tailed features, KEEP them for now.
+```
 
 
 ###
@@ -82,7 +101,7 @@ tree-based models (CART, RF, XGBoost)
 # -> no dummy encoding
 
 ### NOTE: ### Tree-based models can natively handle categorical variables (factors).
-# Therefore, we keep the original 'education' factor variable and remove 'education.num'.
+# So keep 'education' factor var, remove 'education.num'.
 # No scaling or dummy encoding is needed for these models.
 
 train.data.1 <- subset(train.data, select = -c(education.num))
@@ -102,9 +121,12 @@ Linear/Logistic/NN/KNN
 ### preprocess train.data
 train.data.2 <- subset(train.data, select = -c(education))
 
-# obtain numeric column names
+# obtain numeric & categorical column names
 num_cols <- names(train.data.2)[sapply(train.data.2, is.numeric)]
 num_cols <- num_cols[num_cols != "education.num"]
+
+cat_vars <- names(train.data.2)[sapply(train.data.2, is.factor)]
+cat_vars <- setdiff(cat_vars, "income")  # exclude target
 
 # scale numeric data
 scaled_data <- scale(train.data.2[, num_cols])
@@ -116,10 +138,10 @@ sds   <- attr(scaled_data, "scaled:scale")
 
 # dummy encode all categorical variables
 ### note: it is normal that there are more columns being created ###
-train.data.2 <- dummy_cols(
+
+train.data.2 <- dummy_cols(                                        # --> might change
   train.data.2,
-  select_columns = c("workclass", "marital.status", "occupation", "relationship", 
-                     "race", "sex", "native.country"),
+  select_columns = cat_vars,
   remove_first_dummy = TRUE,
   remove_selected_columns = TRUE
 )
@@ -135,11 +157,10 @@ test.data.2 <- subset(test.data, select = -c(education))
 test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, means, "-")
 test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, sds, "/")
 
-# dummy encode all categorical variables
+# dummy encode all categorical variables                              --> might change
 test.data.2 <- dummy_cols(
   test.data.2,
-  select_columns = c("workclass", "marital.status", "occupation", "relationship",
-                     "race", "sex", "native.country"),
+  select_columns = cat_vars,
   remove_first_dummy = TRUE,
   remove_selected_columns = TRUE
 )
@@ -147,26 +168,121 @@ test.data.2 <- dummy_cols(
 # check missing columns 
 # setdiff(names(train.data.2), names(test.data.2))
 
-### NOTE: ### The level "Holand-Netherlands" appeared in the training set but 
+### NOTE: ### level "Holand-Netherlands" appeared in the training set but 
 # not in the test set, so dummy encoding did not create this column in the test data.
 # We manually add the missing dummy variable and set it to 0 for all rows.
 test.data.2[["native.country_Holand-Netherlands"]] <- 0
 
 
-### NOTE: ### Check if the column names of train and test datasets are identical.
-# Model prediction requires the exact same column order, so we align test data 
-# columns to match the training set.
-identical(names(train.data.2), names(test.data.2))      # false
+### NOTE: ### check if column names of train and test datasets are identical.
+# model prediction requires the exact same column order, so align test.data 
+# columns to match train.data.
+
+# identical(names(train.data.2), names(test.data.2))      # false
 test.data.2 <- test.data.2[, names(train.data.2)]
+
+# -------------------------------------------------------------------------------
+
+# testing: variance thresholding for preprocessed train.data.2
+
+# get all numeric features
+numeric.data <- train.data.2[, sapply(train.data.2, is.numeric)]
+
+# look for numbers of columns with variance near 0
+nzv <- nearZeroVar(numeric.data)
+
+# obtain low variance columns, except for "capital.loss"
+low.var.cols <- names(numeric.data[, nzv])
+low.var.cols <- setdiff(low.var.cols, "capital.loss")
+# low.var.cols
+
+# remove them from train.data.2
+train.data.2 <- train.data.2[, !(names(train.data.2) %in% low.var.cols)]
+test.data.2 <- test.data.2[, !(names(test.data.2) %in% low.var.cols)]
+
+# check if columns are in identical order
+# identical(names(train.data.2), names(test.data.2))    --> true
+
+# -------------------------------------------------------------------------------
+
+# remove temp variables
+rm(scaled_data, low.var.cols, nzv)
 ```
 
+
+### PCA test for variable importance, only on train.data.2 -> Zian
+```{r}
+# reason: all vars are numeric, either dummy or continuous, and is standardized 
+# for building Linear/Logistic/NN/KNN models
+
+# obtain new numeric features (after all the processes above)
+numeric.data <- train.data.2[, sapply(train.data.2, is.numeric)]
+
+# get pca result
+pca_result <- prcomp(numeric.data, center = TRUE, scale. = FALSE)
+# summary(pca_result)
+
+# -------------------------------------------------------------------------------
+
+plot(pca_result, type = "l", main = "Scree Plot: Variance Explained by Each Principal Component")
+# first principal component (PC1) explains a significantly larger portion of the variance
+```
+
+```{r}
+# check variable loading of PC 1,2,3
+# they explain most of the variance before the scree plot flattens.
+loadings <- round(pca_result$rotation[, 1:3], 3)
+
+# get all vars with loadings < 0.01 (low contribution)
+low.contrib.vars <- rownames(loadings)[apply(abs(loadings) < 0.01, 1, all)]
+
+cat("Low-contribution variables (loading < 0.01 across PC1–PC3):\n\n")
+print(low.contrib.vars)
+
+# remove vars with low contribution (loading near 0) 
+# to reduce dimensionality without significant information loss
+train.data.2 <- train.data.2[, !(names(train.data.2) %in% low.contrib.vars)]
+test.data.2  <- test.data.2[, !(names(test.data.2) %in% low.contrib.vars)]
+
+# -------------------------------------------------------------------------------
+
+# check if columns are in identical order
+# identical(names(train.data.2), names(test.data.2))       --> true
+
+# -------------------------------------------------------------------------------
+# new pca result
+pca_result <- prcomp(train.data.2[, sapply(train.data.2, is.numeric)],
+                     center = TRUE, 
+                     scale. = FALSE)
+```
+
+
+```{r}
+# plot top 10 variables (by |PC1 loading|) in PC1–PC2 space
+top_vars <- names(sort(abs(pca_result$rotation[, 1]), decreasing = TRUE)[1:10])
+df <- as.data.frame(pca_result$rotation[top_vars, 1:2])
+df$var <- rownames(df)
+
+ggplot(df, aes(x = PC1, y = PC2, label = var)) +
+  geom_segment(aes(xend = 0, yend = 0), arrow = arrow(length = unit(0.2, "cm"))) +
+  geom_text_repel() +
+  labs(title = "Top 10 PCA Variables", x = "PC1", y = "PC2") +
+  theme_minimal()
+
+
+# remove temp variables
+rm(top_vars, df, low.contrib.vars, numeric.data, loadings)
+```
+
+
+
 ###
-PCA (if implementing)
+Optional: PCA datasets for modeling(if implementing)
 ```{r}
 # -> remove all categorical variables
 # -> scaling
-train.data.3 <- train.data[, sapply(train.data, is.numeric)]
-train.data.3 <- scale(train.data.3)
+# train.data.3 <- train.data[, sapply(train.data, is.numeric)]
+# train.data.3 <- scale(train.data.3)
 ```
 
 
