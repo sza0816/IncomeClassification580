@@ -11,6 +11,13 @@ library(fastDummies)
 library(caret)
 library(ggplot2)
 library(ggrepel)
+library(corrplot)
+library(tidyverse)
+library(randomForest)
+library(nnet)
+library(rpart)
+library(rpart.plot)
+library(xgboost)
 ```
 
 
@@ -73,7 +80,29 @@ outliers -> Matthew
 
 correlation analysis-> Tasfia
 ```{r}
+# Subset only numeric predictors
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+numeric_data <- train.data[, numeric_vars]
 
+# Compute correlation matrix
+cor_matrix <- cor(numeric_data)
+cor_matrix
+
+# Display heat map
+corrplot(cor_matrix, method = "color", type = "upper",
+         tl.col = "black",
+         tl.srt = 45,
+         addCoef.col = "black",
+         number.cex = 0.7, 
+         col = colorRampPalette(c("blue", "white", "red"))(200),
+         tl.cex = 0.8,
+         cl.cex = 0.8,
+         mar = c(0,0,1,0))
+
+# no strong linear dependencies among numeric predictors (all |r| < 0.15), 
+# so no further variable removal due to multicollinearity is needed
+
+rm(numeric_vars, numeric_data, cor_matrix)
 ```
 
 
@@ -86,7 +115,7 @@ numeric.data <- train.data[, sapply(train.data, is.numeric)]
 nzv <- nearZeroVar(numeric.data)
 
 # display low variance columns
-# head(numeric.data[, nzv]) 
+head(numeric.data[, nzv], 2) 
 
 ### NOTE: ### 'capital.gain'& 'capital.loss' are mostly 0's but have some very large values.
 # They are classic long-tailed features, KEEP them for now.
@@ -192,12 +221,12 @@ numeric.data <- train.data.2[, sapply(train.data.2, is.numeric)]
 # look for numbers of columns with variance near 0
 nzv <- nearZeroVar(numeric.data)
 
-# obtain low variance columns, except for "capital.loss"
+# obtain low variance columns, except for "capital.loss", "capital.gain"
 low.var.cols <- names(numeric.data[, nzv])
-low.var.cols <- setdiff(low.var.cols, "capital.loss")
+low.var.cols <- setdiff(low.var.cols, c("capital.loss", "capital.gain"))
 # low.var.cols
 
-# remove them from train.data.2
+# remove them from train.data.2 & test.data.2
 train.data.2 <- train.data.2[, !(names(train.data.2) %in% low.var.cols)]
 test.data.2 <- test.data.2[, !(names(test.data.2) %in% low.var.cols)]
 
@@ -237,7 +266,7 @@ loadings <- round(pca_result$rotation[, 1:3], 3)
 # get all vars with loadings < 0.01 (low contribution)
 low.contrib.vars <- rownames(loadings)[apply(abs(loadings) < 0.01, 1, all)]
 
-cat("Low-contribution variables (loading < 0.01 across PC1–PC3):\n\n")
+cat("Low-contribution variables (loading < 0.01 across PC1–PC3):\n")
 print(low.contrib.vars)
 
 # remove vars with low contribution (loading near 0) 
@@ -274,7 +303,7 @@ ggplot(df, aes(x = PC1, y = PC2, label = var)) +
 
 
 # remove temp variables
-rm(top_vars, df, low.contrib.vars, numeric.data, loadings)
+rm(top_vars, df, numeric.data, loadings, low.contrib.vars)
 ```
 
 
