@@ -125,8 +125,8 @@ train.data.2 <- subset(train.data, select = -c(education))
 num_cols <- names(train.data.2)[sapply(train.data.2, is.numeric)]
 num_cols <- num_cols[num_cols != "education.num"]
 
-cat_vars <- names(train.data.2)[sapply(train.data.2, is.factor)]
-cat_vars <- setdiff(cat_vars, "income")  # exclude target
+cat_cols <- names(train.data.2)[sapply(train.data.2, is.factor)]
+cat_cols <- setdiff(cat_cols, "income")  # exclude target
 
 # scale numeric data
 scaled_data <- scale(train.data.2[, num_cols])
@@ -141,7 +141,7 @@ sds   <- attr(scaled_data, "scaled:scale")
 
 train.data.2 <- dummy_cols(                                        # --> might change
   train.data.2,
-  select_columns = cat_vars,
+  select_columns = cat_cols,
   remove_first_dummy = TRUE,
   remove_selected_columns = TRUE
 )
@@ -160,7 +160,7 @@ test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, sds, "/")
 # dummy encode all categorical variables                              --> might change
 test.data.2 <- dummy_cols(
   test.data.2,
-  select_columns = cat_vars,
+  select_columns = cat_cols,
   remove_first_dummy = TRUE,
   remove_selected_columns = TRUE
 )
