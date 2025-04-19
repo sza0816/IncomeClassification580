@@ -124,6 +124,7 @@ train.data.2 <- subset(train.data, select = -c(education))
 # obtain numeric & categorical column names
 num_cols <- names(train.data.2)[sapply(train.data.2, is.numeric)]
 num_cols <- num_cols[num_cols != "education.num"]
+### education.num is treated as an ordinal categorical variable (1–16), so we do not scale it.
 
 cat_cols <- names(train.data.2)[sapply(train.data.2, is.factor)]
 cat_cols <- setdiff(cat_cols, "income")  # exclude target
@@ -139,7 +140,7 @@ sds   <- attr(scaled_data, "scaled:scale")
 # dummy encode all categorical variables
 ### note: it is normal that there are more columns being created ###
 
-train.data.2 <- dummy_cols(                                        # --> might change
+train.data.2 <- dummy_cols(
   train.data.2,
   select_columns = cat_cols,
   remove_first_dummy = TRUE,
@@ -157,7 +158,7 @@ test.data.2 <- subset(test.data, select = -c(education))
 test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, means, "-")
 test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, sds, "/")
 
-# dummy encode all categorical variables                              --> might change
+# dummy encode all categorical variables
 test.data.2 <- dummy_cols(
   test.data.2,
   select_columns = cat_cols,
@@ -247,7 +248,9 @@ test.data.2  <- test.data.2[, !(names(test.data.2) %in% low.contrib.vars)]
 # -------------------------------------------------------------------------------
 
 # check if columns are in identical order
-# identical(names(train.data.2), names(test.data.2))       --> true
+identical(names(train.data.2), names(test.data.2))
+dim(train.data.2)
+dim(test.data.2)
 
 # -------------------------------------------------------------------------------
 # new pca result
@@ -289,8 +292,43 @@ Optional: PCA datasets for modeling(if implementing)
 *** remember to optimize model parameters***
 
 ### model 1: multiple linear model -> Thomas
-change target income column to 0/1
-data scaling
+```{r}
+### while testing, do not only run this code chunk, 
+###clear the environment & run from the beginning
+
+# Convert income column to **numeric**
+train.data.2$income <- as.numeric(ifelse(train.data.2$income == ">50K",1,0))
+test.data.2$income <- as.numeric(ifelse(test.data.2$income == ">50K",1,0))
+
+# -------------------------------------------------------------------------------
+
+#fit mlr
+mlr_model <- lm(income ~ ., data = train.data.2)
+#prediction
+pred_mlr <- predict(mlr_model, test.data.2)
+
+# find y and y_hat
+y <- test.data.2$income
+yhat <- pred_mlr
+
+# -------------------------------------------------------------------------------
+# Predict class
+yhat_binary <- ifelse(pred_mlr > 0.5, 1, 0)
+
+# MSE
+mse_mlr <- mean((y - yhat)^2)
+print(paste("MLR MSE:", mse_mlr))
+
+# Accuracy
+accuracy_mlr <- mean(y == yhat_binary)
+print(paste("MLR Accuracy:", accuracy_mlr))
+
+
+
+# remove temp variables
+rm(y, yhat, yhat_binary)
+```
+
 
 ### model 2: logistic model -> Zian
 data scaling
