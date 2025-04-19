@@ -402,12 +402,12 @@ train.data.1a <- subset(train.data.1, select = -c(race, native.country, fnlwgt))
 cart_model_a <- rpart(income ~ ., data = train.data.1a, control=rpart.control(cp=0), method = "class")
 best_cp <- cart_model_a$cptable[which.min(cart_model$cptable[,"xerror"]),"CP"]
 pruned_model_a <- prune(cart_model_a, cp = best_cp)
-comparemodels(cart_model_a, pruned_model_a, test.data.1a, 'income')
+comparemodels(cart_model_a, pruned_model_a, test.data.1, 'income')
 ```
-
-
-
-do not scale
+```{r}
+preds <- predict(pruned_model_a, test.data.1, type = "class")
+confusionMatrix(preds, test.data.1$income, positive = ">50K")
+```
 
 ### model 5: random forest model -> Matthew
 do not scale
