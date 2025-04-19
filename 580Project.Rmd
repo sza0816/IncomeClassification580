@@ -363,7 +363,7 @@ Optional: PCA datasets for modeling(if implementing)
 *** remember to optimize model parameters***
 
 ### model 1: multiple linear model -> Thomas
-```{r}
+```{r}a
 ### while testing, do not only run this code chunk, 
 ###clear the environment & run from the beginning
 
@@ -461,10 +461,10 @@ set.seed(123)
 rf_model <- randomForest(income ~ ., data = train.data.1, importance = TRUE, ntree = 500)
 
 # Predictions on training data
-train_preds <- predict(rf_model, newdata = test.data.1)
+test_preds <- predict(rf_model, newdata = test.data.1)
 
 # Confusion matrix
-cm <- confusionMatrix(train_preds, test.data.1$income, positive = ">50K")
+cm <- confusionMatrix(test_preds, test.data.1$income, positive = ">50K")
 cm
 ```
 
