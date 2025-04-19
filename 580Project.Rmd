@@ -15,8 +15,8 @@ library(nnet)
 library(rpart)
 library(rpart.plot)
 library(xgboost)
+library(neuralnet)
 ```
-
 
 ```{r}
 # read train.data
@@ -43,78 +43,145 @@ train.data[] <- lapply(train.data,
                            as.factor(trimws(x))
                          else x
                        })
-view(train.data)
+# view(train.data)
 str(train.data)
 ```
+```{r}
+# read test data
+test.data <-read.csv("test.csv", 
+                     header = T, 
+                     na.strings = " ?")
+
+# remove NA
+test.data <- na.omit(test.data)
+
+# remove empty space in front of each char cell
+# ***if needed, factorize/encode char cells***
+
+test.data[] <- lapply(test.data, 
+                       function(x) {
+                         if(is.character(x)) 
+                           as.factor(trimws(x))
+                         else x
+                       })
 
 
-### variable selection, identify important features
-
-correlation analysis-> Tasfia
-``` {r}
-# Subset only numeric predictors
-numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
-numeric_vars
+# View(test.data) 
+str(test.data)
 ```
-
-numeric_data <- train.data[, numeric_vars]
-
-``` {r}
-Compute correlation matrix
-cor_matrix <- cor(numeric_data)
-cor_matrix
-```
-
-``` {r}
-# Display heat map
-corrplot(cor_matrix, method = "color", type = "upper", tl.cex = 0.8)
-```
-
-Feature importance scores using random forest:
-``` {r}
-# Load library
-library(randomForest)
-
-# Make sure the target is a factor
-train.data$income <- as.factor(train.data$income)
-
-# Train the Random Forest model
-set.seed(123)
-rf_model <- randomForest(income ~ ., data = train.data, importance = TRUE, ntree = 500)
-
-# Extract importance scores
-importance_df <- as.data.frame(importance(rf_model))
-
-# Add variable names as a column
-importance_df$Variable <- rownames(importance_df)
-
-# Reorder columns for clarity
-importance_df <- importance_df[, c("Variable", "MeanDecreaseAccuracy", "MeanDecreaseGini")]
-
-# Sort by MeanDecreaseGini (most commonly used)
-importance_df <- importance_df[order(-importance_df$MeanDecreaseGini), ]
-
-# Print the result
-print(importance_df)
-```
-The Random Forest model identified relationship, marital.status, and capital.gain to play a critical role in the model's ability to differentiate between high and low income classes.
-
-dimensionality reduction techniques -> Zian
-
-outliers -> Matthew
-
-
 ###
 tree-based models -> use education(categorical, factorized)
 ```{r}
 train.data.1 <- subset(train.data, select = -c(education.num))
+test.data.1 <- subset(train.data, select = -c(education.num))
 ```
 
 ###
 logistic, linear, NN models -> use education.num(numeric, original)
 ```{r}
 train.data.2 <- subset(train.data, select = -c(education))
+test.data.2 <- subset(train.data, select = -c(education))
 ```
+
+### variable selection, identify important features
+
+correlation analysis -> Tasfia
+
+Correlation Matrix for Numerical Variables:
+``` {r}
+# Identify numeric columns
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+
+# Subset only numeric columns
+numeric_data <- train.data[, numeric_vars]
+
+# Compute correlation matrix
+corr_matrix <- cor(numeric_data, method = "pearson")
+corr_matrix
+```
+
+``` {r}
+# Display heat map
+corrplot(cor_matrix,
+         method = "color",
+         col = colorRampPalette(c("white", "lightpink", "deeppink4"))(10),
+         tl.col = "black",
+         tl.cex = 0.9,
+         addCoef.col = "black",
+         number.cex = 0.7)
+```
+Correlation Matrix for Categorial Variables (just testing this out):
+``` {r}
+library(vcdExtra)
+
+# Select categorical columns
+cat_vars <- train.data[, sapply(train.data, is.factor)]
+
+# Function to compute Cramér's V matrix
+cramers_v_matrix <- function(df) {
+  vars <- names(df)
+  mat <- matrix(NA, ncol = length(vars), nrow = length(vars), 
+                dimnames = list(vars, vars))
+  for (i in vars) {
+    for (j in vars) {
+      tbl <- table(df[[i]], df[[j]])
+      mat[i, j] <- assocstats(tbl)$cramer
+    }
+  }
+  return(as.data.frame(mat))
+}
+
+cramers_v_df <- cramers_v_matrix(cat_vars)
+cramer_mat <- as.matrix(cramers_v_df)
+corrplot(cramer_mat,
+         method = "color",
+         col = colorRampPalette(c("white", "lightblue", "darkblue"))(200),
+         type = "full",
+         tl.col = "black",
+         tl.cex = 0.7,
+         na.label = " ",
+         addCoef.col = "black",
+         number.cex = 0.6)
+```
+
+Fitting Random Forest Model before feature selection:
+``` {r}
+set.seed(123)
+rf_model <- randomForest(income ~ ., data = train.data.1, importance = TRUE, ntree = 500)
+
+# Predictions on training data
+train_preds <- predict(rf_model, newdata = test.data.1)
+
+# Confusion matrix
+cm <- confusionMatrix(train_preds, test.data.1$income, positive = ">50K")
+cm
+```
+
+Feature importance scores using random forest:
+``` {r}
+# Extract importance scores
+importance_df <- as.data.frame(importance(rf_model))
+
+# Add variable names as columns
+importance_df$Variable <- rownames(importance_df)
+
+# Reorder columns
+importance_df <- importance_df[, c("Variable", "MeanDecreaseAccuracy", "MeanDecreaseGini")]
+
+# Sort by MeanDecreaseGini (most commonly used)
+importance_df <- importance_df[order(-importance_df$MeanDecreaseGini), ]
+importance_df
+
+# Plot variable importance
+varImpPlot(rf_model, 
+           main = "Random Forest Variable Importance (All Features)")
+```
+
+dimensionality reduction techniques -> Zian
+
+outliers -> Matthew
+
+
 
 *** remember to optimize model parameters***
 
@@ -130,15 +197,38 @@ data scaling
 ### model 4: CART model -> Nicole
 do not scale
 
-### model 5: random forest model -> Matthew
+### model 5: random forest model -> Tasfia
 do not scale
+
+Random Forest with Reduced Features:
+``` {r}
+train.rf.reduced <- subset(train.data.1, select = -c(race, sex, native.country, capital.loss))
+
+set.seed(123)
+rf_reduced <- randomForest(income ~ ., 
+                           data = train.rf.reduced, 
+                           ntree = 500, 
+                           importance = TRUE)
+
+importance(rf_reduced)
+
+# Plot variable importance
+varImpPlot(rf_reduced, 
+           main = "Random Forest Variable Importance (Reduced Features)")
+```
+Confusion Matrix for RF w/ reduced features:
+``` {r}
+test.rf.reduced <- subset(test.data.1, select = -c(race, sex, native.country, capital.loss))
+
+preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
+
+cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
+cm
+```
 
 ### model 6: extra models, PCA, KNN... -> decide latter
 
 ### explore XgBoost classification --> Thomas
-
-
-
 
 
 ```{r}
@@ -158,29 +248,6 @@ prop.table(table(df$income))
 
 
 
-
-
-
-```{r}
-# read test data
-test.data <-read.csv("test.csv", 
-                     header = T, 
-                     na.strings = " ?")
-
-# remove NA
-test.data <- na.omit(test.data)
-
-# remove empty space in front of each char cell
-# ***if needed, factorize/encode char cells***
-test.data[] <- lapply(test.data, 
-                       function(x) {
-                         if(is.character(x)) trimws(x) else x
-                       })
-
-
-
-View(test.data) 
-```
 
 
 #### this line is used to test push to remove self branch & merge data to remove main branch ####
