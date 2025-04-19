@@ -172,7 +172,6 @@ tree-based models (CART, RF, XGBoost)
 
 train.data.1 <- subset(train.data, select = -c(education.num))
 test.data.1 <- subset(test.data, select = -c(education.num))
-
 # identical(names(train.data.1), names(test.data.1))        # true
 ```
 
