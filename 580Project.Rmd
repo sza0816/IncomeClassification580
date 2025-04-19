@@ -1,6 +1,6 @@
 ---
 title: "580Project"
-author: "Zian Shang"
+author: "Zian Shang, Tasfia Shaikh, Thomas Huang, Nicole Dona, Matthew Davison"
 date: "`r Sys.Date()`"
 output: pdf_document
 ---
