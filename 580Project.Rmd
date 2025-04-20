@@ -580,6 +580,70 @@ cm
 
 
 
+### model 5: random forest model -> Tasfia
+```{r}
+# Fitting Random Forest Model before feature selection:
+set.seed(123)
+rf_model <- randomForest(income ~ ., data = train.data.1, importance = TRUE, ntree = 500)
+
+# Predictions on training data
+test_preds <- predict(rf_model, newdata = test.data.1)
+
+# Confusion matrix
+cm <- confusionMatrix(test_preds, test.data.1$income, positive = ">50K")
+cm
+```
+
+Feature importance scores using random forest:
+```{r}
+# Extract importance scores
+importance_df <- as.data.frame(rf_model$importance)
+
+# Add variable names as columns
+importance_df$Variable <- rownames(importance_df)
+
+# Reorder columns
+importance_df <- importance_df[, c("Variable", "MeanDecreaseAccuracy", "MeanDecreaseGini")]
+
+# Sort by MeanDecreaseGini (most commonly used)
+importance_df <- importance_df[order(-importance_df$MeanDecreaseGini), ]
+importance_df
+
+# Plot variable importance
+varImpPlot(rf_model, 
+           main = "Random Forest Variable Importance (All Features)")
+```
+
+Random Forest with Reduced Features:
+```{r}
+train.rf.reduced <- subset(train.data.1, select = -c(race, sex, native.country))
+
+set.seed(123)
+rf_reduced <- randomForest(income ~ ., 
+                           data = train.rf.reduced, 
+                           ntree = 500, 
+                           importance = TRUE)
+
+rf_reduced$importance
+
+# Plot variable importance
+varImpPlot(rf_reduced, 
+           main = "Random Forest Variable Importance (Reduced Features)")
+```
+Confusion Matrix for RF w/ reduced features:
+```{r}
+test.rf.reduced <- subset(test.data.1, select = -c(race, sex, native.country))
+
+preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
+
+cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
+cm
+```
+
+
+
+
+
 ### model 6: extra models, PCA, KNN... -> decide latter
 
 ### explore XgBoost classification --> Thomas
