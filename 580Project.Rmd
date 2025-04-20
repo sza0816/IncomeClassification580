@@ -22,6 +22,9 @@ library(MASS)
 library(pROC)
 library(vcdExtra)
 library(vcd)
+library(rpart)
+library(rattle)
+library(partykit)
 ```
 
 
@@ -438,15 +441,80 @@ recall <- sensitivity(factor(y_pred), factor(y_true), positive = "1")
 cat("recall/sensitivity:", recall, "\n")
 f1_score <- 2 * precision * recall / (precision + recall)
 cat("F1 Score:", f1_score, "\n")
-```
 
+
+rm(y_true, y_pred, y_prob, roc_obj, probs, pred.income)
+```
 
 
 ### model 3: NN model -> Tasfia
 data scaling
 
+
+
 ### model 4: CART model -> Nicole
-do not scale
+```{r}
+# feature selection
+cart_model <- rpart(income ~ ., data = train.data.1, control=rpart.control(cp=0), method = "class")
+importance <- as.data.frame(cart_model$variable.importance)
+print(importance)
+```
+
+```{r}
+# prune
+# printcp(modelCART) 
+
+best_cp <- cart_model$cptable[which.min(cart_model$cptable[,"xerror"]),"CP"]
+pruned_model <- prune(cart_model, cp = best_cp)
+
+fancyRpartPlot(pruned_model)
+```
+
+```{r}
+# helper function - compare model performances
+comparemodels <- function(model1, model2, test_data, target_col) {
+  preds1 <- predict(model1, test_data, type = "class")
+  preds2 <- predict(model2, test_data, type = "class")
+
+  actuals <- test_data[[target_col]]
+
+  cm1 <- confusionMatrix(preds1, actuals, positive = levels(actuals)[2])
+  cm2 <- confusionMatrix(preds2, actuals, positive = levels(actuals)[2])
+
+  metrics <- data.frame(
+    Model = c("Model 1", "Model 2"),
+    Accuracy = c(cm1$overall["Accuracy"], cm2$overall["Accuracy"]),
+    Sensitivity = c(cm1$byClass["Sensitivity"], cm2$byClass["Sensitivity"]),
+    Specificity = c(cm1$byClass["Specificity"], cm2$byClass["Specificity"])
+  )
+  return(metrics)
+}
+
+comparemodels(cart_model, pruned_model, test.data.1, 'income')
+```
+
+
+```{r}
+# pruned model is better, now lets remove unimportant variables
+test.data.1a <- subset(test.data.1, select = -c(race, native.country, fnlwgt))
+train.data.1a <- subset(train.data.1, select = -c(race, native.country, fnlwgt))
+
+cart_model_a <- rpart(income ~ ., data = train.data.1a, control=rpart.control(cp=0), method = "class")
+best_cp <- cart_model_a$cptable[which.min(cart_model$cptable[,"xerror"]),"CP"]
+pruned_model_a <- prune(cart_model_a, cp = best_cp)
+comparemodels(cart_model_a, pruned_model_a, test.data.1, 'income')
+
+# -------------------------------------------------------------------------------
+
+preds <- predict(pruned_model_a, test.data.1, type = "class")
+confusionMatrix(preds, test.data.1$income, positive = ">50K")
+
+# -------------------------------------------------------------------------------
+
+rm(test.data.1a, train.data.1a)
+```
+
+
 
 ### model 5: random forest model -> Tasfia
 ```{r}
