@@ -533,7 +533,7 @@ cm
 Feature importance scores using random forest:
 ```{r}
 # Extract importance scores
-importance_df <- as.data.frame(importance(rf_model))
+importance_df <- as.data.frame(rf_model$importance)
 
 # Add variable names as columns
 importance_df$Variable <- rownames(importance_df)
@@ -560,7 +560,7 @@ rf_reduced <- randomForest(income ~ .,
                            ntree = 500, 
                            importance = TRUE)
 
-importance(rf_reduced)
+rf_reduced$importance
 
 # Plot variable importance
 varImpPlot(rf_reduced, 
