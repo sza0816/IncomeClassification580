@@ -40,6 +40,10 @@ train.data <- na.omit(train.data)
 # remove empty space in front of each char cell
 # factorize char columns
 
+# remove fnlwgt
+
+train.data <- subset(train.data, select = -c(fnlwgt))
+
 # ***if needed, encoding char cells instead of factorizing them***
 
 train.data[] <- lapply(train.data, 
@@ -272,6 +276,8 @@ Linear/Logistic/NN/KNN
 
 ### preprocess train.data
 train.data.2 <- subset(train.data, select = -c(education))
+train.data.2$capital.gain <- has.gain
+train.data.2$capital.loss <- has.loss
 
 # obtain numeric & categorical column names
 num_cols <- names(train.data.2)[sapply(train.data.2, is.numeric)]
