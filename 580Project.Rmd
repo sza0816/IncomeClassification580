@@ -94,7 +94,7 @@ for(n in numeric_vars) {
   boxplot(train.data[[n]], main = n)
 }
 
-rm(numeric_vars, numeric_data)
+par(c(1,1))
 ```
 Capital gain and loss are highly skewed variables with many 0s, treat as binary?
 
@@ -108,15 +108,13 @@ hours.per.week is centered around 40, but with considerable values <20 and >60, 
 
 ```{r}
 # z-score method
-numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
-numeric_data <- train.data[, numeric_vars]
 
 z.scores <- scale(numeric_data)
 
 outlier.indices <- which(apply(abs(z.scores), 1, function(x) any(x>3)))
 outliers <- numeric_data[outlier.indices, ]
 str(outliers)
-rm(numeric_vars, numeric_data)
+
 ```
 
 
@@ -139,7 +137,6 @@ Consider trimming hours per week of values <20 or >60, there are not many
 Multivariate outliers
 
 ```{r}
-numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
 numeric_data <- na.omit(train.data[, numeric_vars])
 
 dists <- mahalanobis(numeric_data, colMeans(numeric_data), cov(numeric_data))
@@ -148,15 +145,15 @@ threshold <- qchisq(0.975, df = length(numeric_vars))
 mv.outliers <- numeric_data[which(dists > threshold), ]
 str(mv.outliers)
 
-rm(numeric_vars, numeric_data)
+
 ```
 
 
 correlation analysis-> Tasfia
 ```{r}
 # Subset only numeric predictors
-numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
-numeric_data <- train.data[, numeric_vars]
+#numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+#numeric_data <- train.data[, numeric_vars]
 
 # Compute correlation matrix
 cor_matrix <- cor(numeric_data)
