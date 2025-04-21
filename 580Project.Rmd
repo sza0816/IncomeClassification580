@@ -155,17 +155,18 @@ str(mv.outliers)
 
 
 ```
-IQR
+
+IQR method to remove outliers for column hours.per.week
 
 ```{r}
-Q1 <- quantile(na.omit(train.data$hours_per_week), 0.25)
-Q3 <- quantile(na.omit(train.data$hours_per_week), 0.75)
-IQR <- Q3 - Q1
+# Q1 <- quantile(train.data$hours.per.week, 0.25, na.rm = TRUE)
+# Q3 <- quantile(train.data$hours.per.week, 0.75, na.rm = TRUE)
+# IQR <- Q3 - Q1
 
-lower <- Q1 - 1.5 * IQR
-upper <- Q3 + 1.5 * IQR
+# lower <- Q1 - 1.5 * IQR
+# upper <- Q3 + 1.5 * IQR
 
-outliers_hw <- train.data[train.data$hours_per_week < lower | train.data$hours_per_week > upper, ]
+# train.data <- train.data[train.data$hours.per.week >= lower & train.data$hours.per.week <= upper, ]
 ```
 
 
@@ -181,6 +182,8 @@ hist(log.captial.gain, main = "Log(gain+1)")
 hist(train.data$capital.loss, main = "Original Loss")
 hist(log.captial.loss, main = "Log(loss+1)")
 par(mfrow = c(1,1))
+
+rm(log.captial.gain, log.captial.loss)
 ```
 Use binary flags instead
 
@@ -410,14 +413,14 @@ plot(pca_result, type = "l", main = "Scree Plot: Variance Explained by Each Prin
 ```
 
 ```{r}
-# check variable loading of PC 1,2,3
+# check variable loading of PC 1,2,3，4
 # they explain most of the variance before the scree plot flattens.
-loadings <- round(pca_result$rotation[, 1:3], 3)
+loadings <- round(pca_result$rotation[, 1:4], 3)
 
 # get all vars with loadings < 0.01 (low contribution)
 low.contrib.vars <- rownames(loadings)[apply(abs(loadings) < 0.01, 1, all)]
 
-cat("Low-contribution variables (loading < 0.01 across PC1–PC3):\n")
+cat("Low-contribution variables (loading < 0.01 across PC1–PC4):\n")
 print(low.contrib.vars)
 
 # remove vars with low contribution (loading near 0) 
@@ -437,24 +440,10 @@ dim(test.data.2)
 pca_result <- prcomp(train.data.2[, sapply(train.data.2, is.numeric)],
                      center = TRUE, 
                      scale. = FALSE)
-```
-
-
-```{r}
-# plot top 10 variables (by |PC1 loading|) in PC1–PC2 space
-top_vars <- names(sort(abs(pca_result$rotation[, 1]), decreasing = TRUE)[1:10])
-df <- as.data.frame(pca_result$rotation[top_vars, 1:2])
-df$var <- rownames(df)
-
-ggplot(df, aes(x = PC1, y = PC2, label = var)) +
-  geom_segment(aes(xend = 0, yend = 0), arrow = arrow(length = unit(0.2, "cm"))) +
-  geom_text_repel() +
-  labs(title = "Top 10 PCA Variables", x = "PC1", y = "PC2") +
-  theme_minimal()
 
 
 # remove temp variables
-rm(top_vars, df, numeric.data, loadings, low.contrib.vars)
+rm(numeric.data, loadings, low.contrib.vars)
 ```
 
 
@@ -608,8 +597,8 @@ comparemodels(cart_model, pruned_model, test.data.1, 'income')
 
 ```{r}
 # pruned model is better, now lets remove unimportant variables
-test.data.1a <- subset(test.data.1, select = -c(race, native.country, fnlwgt))
-train.data.1a <- subset(train.data.1, select = -c(race, native.country, fnlwgt))
+test.data.1a <- subset(test.data.1, select = -c(race, native.country))
+train.data.1a <- subset(train.data.1, select = -c(race, native.country))
 
 cart_model_a <- rpart(income ~ ., data = train.data.1a, control=rpart.control(cp=0), method = "class")
 best_cp <- cart_model_a$cptable[which.min(cart_model$cptable[,"xerror"]),"CP"]
@@ -662,96 +651,32 @@ varImpPlot(rf_model,
            main = "Random Forest Variable Importance (All Features)")
 ```
 
-Random Forest with Reduced Features:
+Random Forest with Reduced Features: --> don't need anymore
 ```{r}
-train.rf.reduced <- subset(train.data.1, select = -c(race, sex, native.country))
+# train.rf.reduced <- subset(train.data.1, select = -c(sex))
 
-set.seed(123)
-rf_reduced <- randomForest(income ~ ., 
-                           data = train.rf.reduced, 
-                           ntree = 500, 
-                           importance = TRUE)
+# set.seed(123)
+# rf_reduced <- randomForest(income ~ ., 
+#                            data = train.rf.reduced, 
+#                           ntree = 500, 
+#                           importance = TRUE)
 
-rf_reduced$importance
+#rf_reduced$importance
 
 # Plot variable importance
-varImpPlot(rf_reduced, 
-           main = "Random Forest Variable Importance (Reduced Features)")
+#varImpPlot(rf_reduced, 
+#           main = "Random Forest Variable Importance (Reduced Features)")
 ```
+
 Confusion Matrix for RF w/ reduced features:
 ```{r}
-test.rf.reduced <- subset(test.data.1, select = -c(race, sex, native.country))
+#test.rf.reduced <- subset(test.data.1, select = -c(sex))
 
-preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
+#preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
 
-cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
-cm
+#cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
+#cm
 ```
-
-
-
-
-
-### model 5: random forest model -> Tasfia
-```{r}
-# Fitting Random Forest Model before feature selection:
-set.seed(123)
-rf_model <- randomForest(income ~ ., data = train.data.1, importance = TRUE, ntree = 500)
-
-# Predictions on training data
-test_preds <- predict(rf_model, newdata = test.data.1)
-
-# Confusion matrix
-cm <- confusionMatrix(test_preds, test.data.1$income, positive = ">50K")
-cm
-```
-
-Feature importance scores using random forest:
-```{r}
-# Extract importance scores
-importance_df <- as.data.frame(rf_model$importance)
-
-# Add variable names as columns
-importance_df$Variable <- rownames(importance_df)
-
-# Reorder columns
-importance_df <- importance_df[, c("Variable", "MeanDecreaseAccuracy", "MeanDecreaseGini")]
-
-# Sort by MeanDecreaseGini (most commonly used)
-importance_df <- importance_df[order(-importance_df$MeanDecreaseGini), ]
-importance_df
-
-# Plot variable importance
-varImpPlot(rf_model, 
-           main = "Random Forest Variable Importance (All Features)")
-```
-
-Random Forest with Reduced Features:
-```{r}
-train.rf.reduced <- subset(train.data.1, select = -c(race, sex, native.country))
-
-set.seed(123)
-rf_reduced <- randomForest(income ~ ., 
-                           data = train.rf.reduced, 
-                           ntree = 500, 
-                           importance = TRUE)
-
-rf_reduced$importance
-
-# Plot variable importance
-varImpPlot(rf_reduced, 
-           main = "Random Forest Variable Importance (Reduced Features)")
-```
-Confusion Matrix for RF w/ reduced features:
-```{r}
-test.rf.reduced <- subset(test.data.1, select = -c(race, sex, native.country))
-
-preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
-
-cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
-cm
-```
-
 
 
 
