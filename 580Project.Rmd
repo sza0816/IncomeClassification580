@@ -147,6 +147,27 @@ str(mv.outliers)
 
 
 ```
+Testing log transform -- Doesn't seem to help
+
+```{r}
+log.captial.gain <- log(train.data$capital.gain + 1)
+log.captial.loss <- log(train.data$capital.gain + 1)
+
+par(mfrow = c(2,2))
+hist(train.data$capital.gain, main = "Original Gain")
+hist(log.captial.gain, main = "Log(gain+1)")
+hist(train.data$capital.loss, main = "Original Loss")
+hist(log.captial.loss, main = "Log(loss+1)")
+```
+Use binary flags instead
+
+```{r}
+has.gain <- as.factor(ifelse(train.data$capital.gain > 0, 1, 0))
+has.loss <- as.factor(ifelse(train.data$capital.loss > 0, 1, 0))
+
+test.has.gain <- as.factor(ifelse(test.data$capital.gain > 0, 1, 0))
+test.has.loss <- as.factor(ifelse(test.data$capital.loss > 0, 1, 0))
+```
 
 
 correlation analysis-> Tasfia
