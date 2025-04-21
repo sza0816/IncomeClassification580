@@ -67,6 +67,10 @@ test.data <-read.csv("test.csv",
 # remove NA
 test.data <- na.omit(test.data)
 
+# remove fnlwgt
+
+test.data <- subset(test.data, select = -c(fnlwgt))
+
 # remove empty space in front of each char cell
 # ***if needed, factorize/encode char cells***
 test.data[] <- lapply(test.data, 
@@ -98,7 +102,7 @@ for(n in numeric_vars) {
   boxplot(train.data[[n]], main = n)
 }
 
-par(c(1,1))
+par(mfrow = c(1,1))
 ```
 Capital gain and loss are highly skewed variables with many 0s, treat as binary?
 
@@ -151,6 +155,20 @@ str(mv.outliers)
 
 
 ```
+IQR
+
+```{r}
+Q1 <- quantile(na.omit(train.data$hours_per_week), 0.25)
+Q3 <- quantile(na.omit(train.data$hours_per_week), 0.75)
+IQR <- Q3 - Q1
+
+lower <- Q1 - 1.5 * IQR
+upper <- Q3 + 1.5 * IQR
+
+outliers_hw <- train.data[train.data$hours_per_week < lower | train.data$hours_per_week > upper, ]
+```
+
+
 Testing log transform -- Doesn't seem to help
 
 ```{r}
@@ -162,6 +180,7 @@ hist(train.data$capital.gain, main = "Original Gain")
 hist(log.captial.gain, main = "Log(gain+1)")
 hist(train.data$capital.loss, main = "Original Loss")
 hist(log.captial.loss, main = "Log(loss+1)")
+par(mfrow = c(1,1))
 ```
 Use binary flags instead
 
@@ -311,6 +330,9 @@ train.data.2 <- dummy_cols(
 test.data.2 <- subset(test.data, select = -c(education))
 
 # num_cols are the same
+
+test.data.2$capital.gain <- test.has.gain
+test.data.2$capital.loss <- test.has.loss
 
 # scale test data using means & stds from the train data
 test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, means, "-")
