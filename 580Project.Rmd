@@ -82,9 +82,75 @@ test.data$native.country <- factor(test.data$native.country,
 ### variable selection, identify important features
 
 outliers -> Matthew
+
+
 ```{r}
+# Start with box plots to visualize which variables have outliers
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+numeric_data <- train.data[, numeric_vars]
+
+par(mfrow = c(2,3))
+for(n in numeric_vars) {
+  boxplot(train.data[[n]], main = n)
+}
+
+rm(numeric_vars, numeric_data)
+```
+Capital gain and loss are highly skewed variables with many 0s, treat as binary?
+
+Age has a decent amount of observations >=80, far from the average
+
+Education.num seems clean
+
+fnlwgt might not have any interpretable meaning, drop?
+
+hours.per.week is centered around 40, but with considerable values <20 and >60, what is reasonable?
+
+```{r}
+# z-score method
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+numeric_data <- train.data[, numeric_vars]
+
+z.scores <- scale(numeric_data)
+
+outlier.indices <- which(apply(abs(z.scores), 1, function(x) any(x>3)))
+outliers <- numeric_data[outlier.indices, ]
+str(outliers)
+rm(numeric_vars, numeric_data)
+```
+
+
+```{r}
+# look at distributions of some vars
+
+ggplot(train.data, aes(x = capital.gain)) +
+  geom_histogram(bins = 50) +
+  scale_x_log10() +
+  ggtitle("Capital Gain Distribution (log scale)")
+
+ggplot(train.data, aes(x = hours.per.week)) +
+  geom_histogram(bins = 30) +
+  ggtitle("Hours per Week Distribution")
 
 ```
+If keeping capital.gain, maybe remove values <1000 or >50000
+Consider trimming hours per week of values <20 or >60, there are not many
+
+Multivariate outliers
+
+```{r}
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+numeric_data <- na.omit(train.data[, numeric_vars])
+
+dists <- mahalanobis(numeric_data, colMeans(numeric_data), cov(numeric_data))
+threshold <- qchisq(0.975, df = length(numeric_vars))
+
+mv.outliers <- numeric_data[which(dists > threshold), ]
+str(mv.outliers)
+
+rm(numeric_vars, numeric_data)
+```
+
 
 correlation analysis-> Tasfia
 ```{r}
