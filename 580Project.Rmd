@@ -40,6 +40,10 @@ train.data <- na.omit(train.data)
 # remove empty space in front of each char cell
 # factorize char columns
 
+# remove fnlwgt
+
+train.data <- subset(train.data, select = -c(fnlwgt))
+
 # ***if needed, encoding char cells instead of factorizing them***
 
 train.data[] <- lapply(train.data, 
@@ -63,6 +67,10 @@ test.data <-read.csv("test.csv",
 # remove NA
 test.data <- na.omit(test.data)
 
+# remove fnlwgt
+
+test.data <- subset(test.data, select = -c(fnlwgt))
+
 # remove empty space in front of each char cell
 # ***if needed, factorize/encode char cells***
 test.data[] <- lapply(test.data, 
@@ -82,15 +90,117 @@ test.data$native.country <- factor(test.data$native.country,
 ### variable selection, identify important features
 
 outliers -> Matthew
+
+
 ```{r}
+# Start with box plots to visualize which variables have outliers
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+numeric_data <- train.data[, numeric_vars]
+
+par(mfrow = c(2,3))
+for(n in numeric_vars) {
+  boxplot(train.data[[n]], main = n)
+}
+
+par(mfrow = c(1,1))
+```
+Capital gain and loss are highly skewed variables with many 0s, treat as binary?
+
+Age has a decent amount of observations >=80, far from the average
+
+Education.num seems clean
+
+fnlwgt might not have any interpretable meaning, drop?
+
+hours.per.week is centered around 40, but with considerable values <20 and >60, what is reasonable?
+
+```{r}
+# z-score method
+
+z.scores <- scale(numeric_data)
+
+outlier.indices <- which(apply(abs(z.scores), 1, function(x) any(x>3)))
+outliers <- numeric_data[outlier.indices, ]
+str(outliers)
 
 ```
+
+
+```{r}
+# look at distributions of some vars
+
+ggplot(train.data, aes(x = capital.gain)) +
+  geom_histogram(bins = 50) +
+  scale_x_log10() +
+  ggtitle("Capital Gain Distribution (log scale)")
+
+ggplot(train.data, aes(x = hours.per.week)) +
+  geom_histogram(bins = 30) +
+  ggtitle("Hours per Week Distribution")
+
+```
+If keeping capital.gain, maybe remove values <1000 or >50000
+Consider trimming hours per week of values <20 or >60, there are not many
+
+Multivariate outliers
+
+```{r}
+numeric_data <- na.omit(train.data[, numeric_vars])
+
+dists <- mahalanobis(numeric_data, colMeans(numeric_data), cov(numeric_data))
+threshold <- qchisq(0.975, df = length(numeric_vars))
+
+mv.outliers <- numeric_data[which(dists > threshold), ]
+str(mv.outliers)
+
+
+```
+
+IQR method to remove outliers for column hours.per.week
+
+```{r}
+# Q1 <- quantile(train.data$hours.per.week, 0.25, na.rm = TRUE)
+# Q3 <- quantile(train.data$hours.per.week, 0.75, na.rm = TRUE)
+# IQR <- Q3 - Q1
+
+# lower <- Q1 - 1.5 * IQR
+# upper <- Q3 + 1.5 * IQR
+
+# train.data <- train.data[train.data$hours.per.week >= lower & train.data$hours.per.week <= upper, ]
+```
+
+
+Testing log transform -- Doesn't seem to help
+
+```{r}
+log.captial.gain <- log(train.data$capital.gain + 1)
+log.captial.loss <- log(train.data$capital.gain + 1)
+
+par(mfrow = c(2,2))
+hist(train.data$capital.gain, main = "Original Gain")
+hist(log.captial.gain, main = "Log(gain+1)")
+hist(train.data$capital.loss, main = "Original Loss")
+hist(log.captial.loss, main = "Log(loss+1)")
+par(mfrow = c(1,1))
+
+rm(log.captial.gain, log.captial.loss)
+```
+Use binary flags instead
+
+```{r}
+has.gain <- as.factor(ifelse(train.data$capital.gain > 0, 1, 0))
+has.loss <- as.factor(ifelse(train.data$capital.loss > 0, 1, 0))
+
+test.has.gain <- as.factor(ifelse(test.data$capital.gain > 0, 1, 0))
+test.has.loss <- as.factor(ifelse(test.data$capital.loss > 0, 1, 0))
+```
+
 
 correlation analysis-> Tasfia
 ```{r}
 # Subset only numeric predictors
-numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
-numeric_data <- train.data[, numeric_vars]
+#numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+#numeric_data <- train.data[, numeric_vars]
 
 # Compute correlation matrix
 cor_matrix <- cor(numeric_data)
@@ -188,6 +298,8 @@ Linear/Logistic/NN/KNN
 
 ### preprocess train.data
 train.data.2 <- subset(train.data, select = -c(education))
+train.data.2$capital.gain <- has.gain
+train.data.2$capital.loss <- has.loss
 
 # obtain numeric & categorical column names
 num_cols <- names(train.data.2)[sapply(train.data.2, is.numeric)]
@@ -221,6 +333,9 @@ train.data.2 <- dummy_cols(
 test.data.2 <- subset(test.data, select = -c(education))
 
 # num_cols are the same
+
+test.data.2$capital.gain <- test.has.gain
+test.data.2$capital.loss <- test.has.loss
 
 # scale test data using means & stds from the train data
 test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, means, "-")
@@ -298,14 +413,14 @@ plot(pca_result, type = "l", main = "Scree Plot: Variance Explained by Each Prin
 ```
 
 ```{r}
-# check variable loading of PC 1,2,3
+# check variable loading of PC 1,2,3，4
 # they explain most of the variance before the scree plot flattens.
-loadings <- round(pca_result$rotation[, 1:3], 3)
+loadings <- round(pca_result$rotation[, 1:4], 3)
 
 # get all vars with loadings < 0.01 (low contribution)
 low.contrib.vars <- rownames(loadings)[apply(abs(loadings) < 0.01, 1, all)]
 
-cat("Low-contribution variables (loading < 0.01 across PC1–PC3):\n")
+cat("Low-contribution variables (loading < 0.01 across PC1–PC4):\n")
 print(low.contrib.vars)
 
 # remove vars with low contribution (loading near 0) 
@@ -325,24 +440,10 @@ dim(test.data.2)
 pca_result <- prcomp(train.data.2[, sapply(train.data.2, is.numeric)],
                      center = TRUE, 
                      scale. = FALSE)
-```
-
-
-```{r}
-# plot top 10 variables (by |PC1 loading|) in PC1–PC2 space
-top_vars <- names(sort(abs(pca_result$rotation[, 1]), decreasing = TRUE)[1:10])
-df <- as.data.frame(pca_result$rotation[top_vars, 1:2])
-df$var <- rownames(df)
-
-ggplot(df, aes(x = PC1, y = PC2, label = var)) +
-  geom_segment(aes(xend = 0, yend = 0), arrow = arrow(length = unit(0.2, "cm"))) +
-  geom_text_repel() +
-  labs(title = "Top 10 PCA Variables", x = "PC1", y = "PC2") +
-  theme_minimal()
 
 
 # remove temp variables
-rm(top_vars, df, numeric.data, loadings, low.contrib.vars)
+rm(numeric.data, loadings, low.contrib.vars)
 ```
 
 
@@ -496,8 +597,8 @@ comparemodels(cart_model, pruned_model, test.data.1, 'income')
 
 ```{r}
 # pruned model is better, now lets remove unimportant variables
-test.data.1a <- subset(test.data.1, select = -c(race, native.country, fnlwgt))
-train.data.1a <- subset(train.data.1, select = -c(race, native.country, fnlwgt))
+test.data.1a <- subset(test.data.1, select = -c(race, native.country))
+train.data.1a <- subset(train.data.1, select = -c(race, native.country))
 
 cart_model_a <- rpart(income ~ ., data = train.data.1a, control=rpart.control(cp=0), method = "class")
 best_cp <- cart_model_a$cptable[which.min(cart_model$cptable[,"xerror"]),"CP"]
@@ -550,96 +651,32 @@ varImpPlot(rf_model,
            main = "Random Forest Variable Importance (All Features)")
 ```
 
-Random Forest with Reduced Features:
+Random Forest with Reduced Features: --> don't need anymore
 ```{r}
-train.rf.reduced <- subset(train.data.1, select = -c(race, sex, native.country))
+# train.rf.reduced <- subset(train.data.1, select = -c(sex))
 
-set.seed(123)
-rf_reduced <- randomForest(income ~ ., 
-                           data = train.rf.reduced, 
-                           ntree = 500, 
-                           importance = TRUE)
+# set.seed(123)
+# rf_reduced <- randomForest(income ~ ., 
+#                            data = train.rf.reduced, 
+#                           ntree = 500, 
+#                           importance = TRUE)
 
-rf_reduced$importance
+#rf_reduced$importance
 
 # Plot variable importance
-varImpPlot(rf_reduced, 
-           main = "Random Forest Variable Importance (Reduced Features)")
+#varImpPlot(rf_reduced, 
+#           main = "Random Forest Variable Importance (Reduced Features)")
 ```
+
 Confusion Matrix for RF w/ reduced features:
 ```{r}
-test.rf.reduced <- subset(test.data.1, select = -c(race, sex, native.country))
+#test.rf.reduced <- subset(test.data.1, select = -c(sex))
 
-preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
+#preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
 
-cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
-cm
+#cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
+#cm
 ```
-
-
-
-
-
-### model 5: random forest model -> Tasfia
-```{r}
-# Fitting Random Forest Model before feature selection:
-set.seed(123)
-rf_model <- randomForest(income ~ ., data = train.data.1, importance = TRUE, ntree = 500)
-
-# Predictions on training data
-test_preds <- predict(rf_model, newdata = test.data.1)
-
-# Confusion matrix
-cm <- confusionMatrix(test_preds, test.data.1$income, positive = ">50K")
-cm
-```
-
-Feature importance scores using random forest:
-```{r}
-# Extract importance scores
-importance_df <- as.data.frame(rf_model$importance)
-
-# Add variable names as columns
-importance_df$Variable <- rownames(importance_df)
-
-# Reorder columns
-importance_df <- importance_df[, c("Variable", "MeanDecreaseAccuracy", "MeanDecreaseGini")]
-
-# Sort by MeanDecreaseGini (most commonly used)
-importance_df <- importance_df[order(-importance_df$MeanDecreaseGini), ]
-importance_df
-
-# Plot variable importance
-varImpPlot(rf_model, 
-           main = "Random Forest Variable Importance (All Features)")
-```
-
-Random Forest with Reduced Features:
-```{r}
-train.rf.reduced <- subset(train.data.1, select = -c(race, sex, native.country))
-
-set.seed(123)
-rf_reduced <- randomForest(income ~ ., 
-                           data = train.rf.reduced, 
-                           ntree = 500, 
-                           importance = TRUE)
-
-rf_reduced$importance
-
-# Plot variable importance
-varImpPlot(rf_reduced, 
-           main = "Random Forest Variable Importance (Reduced Features)")
-```
-Confusion Matrix for RF w/ reduced features:
-```{r}
-test.rf.reduced <- subset(test.data.1, select = -c(race, sex, native.country))
-
-preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
-
-cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
-cm
-```
-
 
 
 
