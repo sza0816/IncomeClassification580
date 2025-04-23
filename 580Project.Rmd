@@ -15,7 +15,7 @@ library(corrplot)
 library(tidyverse)
 library(randomForest)
 library(nnet)
-library(NeuralNetTools)
+library(NeuralNetTools) # for neural net plots
 library(rpart)
 library(rpart.plot)
 library(xgboost)
