@@ -1,0 +1,794 @@
+---
+title: "580Project"
+author: "Zian Shang, Tasfia Shaikh, Thomas Huang, Nicole Dona, Matthew Davison"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r}
+# include packages
+library(fastDummies)
+library(caret)
+library(ggplot2)
+library(ggrepel)
+library(corrplot)
+library(tidyverse)
+library(randomForest)
+library(nnet)
+library(NeuralNetTools)
+library(rpart)
+library(rpart.plot)
+library(xgboost)
+library(MASS)
+library(pROC)
+library(vcdExtra)
+library(vcd)
+library(rpart)
+library(rattle)
+library(partykit)
+```
+
+
+```{r}
+# read train.data
+train.data <- read.csv("train.csv", 
+                       header = T, 
+                       na.strings = " ?")
+
+# remove NA
+train.data <- na.omit(train.data)
+
+# remove empty space in front of each char cell
+# factorize char columns
+
+# remove fnlwgt
+
+train.data <- subset(train.data, select = -c(fnlwgt))
+
+# ***if needed, encoding char cells instead of factorizing them***
+
+train.data[] <- lapply(train.data, 
+                       function(x) {
+                         if(is.character(x)) 
+                           as.factor(trimws(x))
+                         else x
+                       })
+
+# View(train.data)
+# str(train.data)
+```
+
+
+```{r}
+# read test data
+test.data <-read.csv("~/Desktop/IncomeClassification580/train.csv", 
+                     header = T, 
+                     na.strings = " ?")
+
+# remove NA
+test.data <- na.omit(test.data)
+
+# remove fnlwgt
+
+test.data <- subset(test.data, select = -c(fnlwgt))
+
+# remove empty space in front of each char cell
+# ***if needed, factorize/encode char cells***
+test.data[] <- lapply(test.data, 
+                       function(x) {
+                         if(is.character(x)) 
+                           as.factor(trimws(x))
+                         else x
+                       })
+test.data$native.country <- factor(test.data$native.country, 
+                                   levels = levels(train.data$native.country))
+
+# View(test.data) 
+# str(test.data)
+```
+
+
+### variable selection, identify important features
+
+outliers -> Matthew
+
+
+```{r}
+# Start with box plots to visualize which variables have outliers
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+numeric_data <- train.data[, numeric_vars]
+
+par(mfrow = c(2,3))
+for(n in numeric_vars) {
+  boxplot(train.data[[n]], main = n)
+}
+
+par(mfrow = c(1,1))
+```
+Capital gain and loss are highly skewed variables with many 0s, treat as binary?
+
+Age has a decent amount of observations >=80, far from the average
+
+Education.num seems clean
+
+fnlwgt might not have any interpretable meaning, drop?
+
+hours.per.week is centered around 40, but with considerable values <20 and >60, what is reasonable?
+
+```{r}
+# z-score method
+
+z.scores <- scale(numeric_data)
+
+outlier.indices <- which(apply(abs(z.scores), 1, function(x) any(x>3)))
+outliers <- numeric_data[outlier.indices, ]
+str(outliers)
+
+```
+
+
+```{r}
+# look at distributions of some vars
+
+ggplot(train.data, aes(x = capital.gain)) +
+  geom_histogram(bins = 50) +
+  scale_x_log10() +
+  ggtitle("Capital Gain Distribution (log scale)")
+
+ggplot(train.data, aes(x = hours.per.week)) +
+  geom_histogram(bins = 30) +
+  ggtitle("Hours per Week Distribution")
+
+```
+If keeping capital.gain, maybe remove values <1000 or >50000
+Consider trimming hours per week of values <20 or >60, there are not many
+
+Multivariate outliers
+
+```{r}
+numeric_data <- na.omit(train.data[, numeric_vars])
+
+dists <- mahalanobis(numeric_data, colMeans(numeric_data), cov(numeric_data))
+threshold <- qchisq(0.975, df = length(numeric_vars))
+
+mv.outliers <- numeric_data[which(dists > threshold), ]
+str(mv.outliers)
+
+
+```
+
+IQR method to remove outliers for column hours.per.week
+
+```{r}
+# Q1 <- quantile(train.data$hours.per.week, 0.25, na.rm = TRUE)
+# Q3 <- quantile(train.data$hours.per.week, 0.75, na.rm = TRUE)
+# IQR <- Q3 - Q1
+
+# lower <- Q1 - 1.5 * IQR
+# upper <- Q3 + 1.5 * IQR
+
+# train.data <- train.data[train.data$hours.per.week >= lower & train.data$hours.per.week <= upper, ]
+```
+
+
+Testing log transform -- Doesn't seem to help
+
+```{r}
+log.captial.gain <- log(train.data$capital.gain + 1)
+log.captial.loss <- log(train.data$capital.gain + 1)
+
+par(mfrow = c(2,2))
+hist(train.data$capital.gain, main = "Original Gain")
+hist(log.captial.gain, main = "Log(gain+1)")
+hist(train.data$capital.loss, main = "Original Loss")
+hist(log.captial.loss, main = "Log(loss+1)")
+par(mfrow = c(1,1))
+
+rm(log.captial.gain, log.captial.loss)
+```
+Use binary flags instead
+
+```{r}
+has.gain <- as.factor(ifelse(train.data$capital.gain > 0, 1, 0))
+has.loss <- as.factor(ifelse(train.data$capital.loss > 0, 1, 0))
+
+test.has.gain <- as.factor(ifelse(test.data$capital.gain > 0, 1, 0))
+test.has.loss <- as.factor(ifelse(test.data$capital.loss > 0, 1, 0))
+```
+
+
+correlation analysis-> Tasfia
+```{r}
+# Subset only numeric predictors
+#numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+#numeric_data <- train.data[, numeric_vars]
+
+# Compute correlation matrix
+cor_matrix <- cor(numeric_data)
+cor_matrix
+
+# Display heat map
+# Display heat map
+corrplot(cor_matrix,
+         method = "color",
+         col = colorRampPalette(c("white", "lightpink", "deeppink4"))(10),
+         tl.col = "black",
+         tl.cex = 0.9,
+         addCoef.col = "black",
+         number.cex = 0.7)
+
+# no strong linear dependencies among numeric predictors (all |r| < 0.15), 
+# so no further variable removal due to multicollinearity is needed
+
+rm(numeric_vars, numeric_data, cor_matrix)
+```
+
+
+Correlation Matrix for Categorial Variables (just testing this out): -> Tasfia
+```{r}
+# Select categorical columns
+cat_vars <- train.data[, sapply(train.data, is.factor)]
+
+# Function to compute Cramér's V matrix
+cramers_v_matrix <- function(df) {
+  vars <- names(df)
+  mat <- matrix(NA, ncol = length(vars), nrow = length(vars), 
+                dimnames = list(vars, vars))
+  for (i in vars) {
+    for (j in vars) {
+      tbl <- table(df[[i]], df[[j]])
+      mat[i, j] <- assocstats(tbl)$cramer
+    }
+  }
+  return(as.data.frame(mat))
+}
+
+cramers_v_df <- cramers_v_matrix(cat_vars)
+cramer_mat <- as.matrix(cramers_v_df)
+corrplot(cramer_mat,
+         method = "color",
+         col = colorRampPalette(c("white", "lightblue", "darkblue"))(200),
+         type = "full",
+         tl.col = "black",
+         tl.cex = 0.7,
+         na.label = " ",
+         addCoef.col = "black",
+         number.cex = 0.6)
+```
+
+
+Variance Thresholding -> Zian
+```{r}
+# get all numeric features
+numeric.data <- train.data[, sapply(train.data, is.numeric)]
+
+# look for numbers of columns with variance near 0
+nzv <- nearZeroVar(numeric.data)
+
+# display low variance columns
+head(numeric.data[, nzv], 2) 
+
+### NOTE: ### 'capital.gain'& 'capital.loss' are mostly 0's but have some very large values.
+# They are classic long-tailed features, KEEP them for now.
+```
+
+
+###
+tree-based models (CART, RF, XGBoost)
+```{r}
+# -> use education(categorical, factorized)
+# -> no scaling
+# -> no dummy encoding
+
+### NOTE: ### Tree-based models can natively handle categorical variables (factors).
+# So keep 'education' factor var, remove 'education.num'.
+# No scaling or dummy encoding is needed for these models.
+
+train.data.1 <- subset(train.data, select = -c(education.num))
+test.data.1 <- subset(test.data, select = -c(education.num))
+# identical(names(train.data.1), names(test.data.1))        # true
+```
+
+###
+Linear/Logistic/NN/KNN 
+```{r}
+# -> use education.num(numeric, original)
+# -> scaling
+# -> dummy encode all categorical variables
+
+
+### preprocess train.data
+train.data.2 <- subset(train.data, select = -c(education))
+train.data.2$capital.gain <- has.gain
+train.data.2$capital.loss <- has.loss
+
+# obtain numeric & categorical column names
+num_cols <- names(train.data.2)[sapply(train.data.2, is.numeric)]
+num_cols <- num_cols[num_cols != "education.num"]
+### education.num is treated as an ordinal categorical variable (1–16), so we do not scale it.
+
+cat_cols <- names(train.data.2)[sapply(train.data.2, is.factor)]
+cat_cols <- setdiff(cat_cols, "income")  # exclude target
+
+# scale numeric data
+scaled_data <- scale(train.data.2[, num_cols])
+train.data.2[, num_cols] <- scaled_data
+
+# obtain means & stds for KNN
+means <- attr(scaled_data, "scaled:center")
+sds   <- attr(scaled_data, "scaled:scale")
+
+# dummy encode all categorical variables
+### note: it is normal that there are more columns being created ###
+
+train.data.2 <- dummy_cols(
+  train.data.2,
+  select_columns = cat_cols,
+  remove_first_dummy = TRUE,
+  remove_selected_columns = TRUE
+)
+
+# -------------------------------------------------------------------------------
+
+### preprocess test.data in the same way
+test.data.2 <- subset(test.data, select = -c(education))
+
+# num_cols are the same
+
+test.data.2$capital.gain <- test.has.gain
+test.data.2$capital.loss <- test.has.loss
+
+# scale test data using means & stds from the train data
+test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, means, "-")
+test.data.2[, num_cols] <- sweep(test.data.2[, num_cols], 2, sds, "/")
+
+# dummy encode all categorical variables
+test.data.2 <- dummy_cols(
+  test.data.2,
+  select_columns = cat_cols,
+  remove_first_dummy = TRUE,
+  remove_selected_columns = TRUE
+)
+
+# check missing columns 
+# setdiff(names(train.data.2), names(test.data.2))
+
+### NOTE: ### level "Holand-Netherlands" appeared in the training set but 
+# not in the test set, so dummy encoding did not create this column in the test data.
+# We manually add the missing dummy variable and set it to 0 for all rows.
+test.data.2[["native.country_Holand-Netherlands"]] <- 0
+
+
+### NOTE: ### check if column names of train and test datasets are identical.
+# model prediction requires the exact same column order, so align test.data 
+# columns to match train.data.
+
+# identical(names(train.data.2), names(test.data.2))      # false
+test.data.2 <- test.data.2[, names(train.data.2)]
+
+# -------------------------------------------------------------------------------
+
+# testing: variance thresholding for preprocessed train.data.2
+
+# get all numeric features
+numeric.data <- train.data.2[, sapply(train.data.2, is.numeric)]
+
+# look for numbers of columns with variance near 0
+nzv <- nearZeroVar(numeric.data)
+
+# obtain low variance columns, except for "capital.loss", "capital.gain"
+low.var.cols <- names(numeric.data[, nzv])
+low.var.cols <- setdiff(low.var.cols, c("capital.loss", "capital.gain"))
+# low.var.cols
+
+# remove them from train.data.2 & test.data.2
+train.data.2 <- train.data.2[, !(names(train.data.2) %in% low.var.cols)]
+test.data.2 <- test.data.2[, !(names(test.data.2) %in% low.var.cols)]
+
+# check if columns are in identical order
+# identical(names(train.data.2), names(test.data.2))    --> true
+
+# -------------------------------------------------------------------------------
+
+# remove temp variables
+rm(scaled_data, low.var.cols, nzv)
+```
+
+
+### PCA test for variable importance, only on train.data.2 -> Zian
+```{r}
+# reason: all vars are numeric, either dummy or continuous, and is standardized 
+# for building Linear/Logistic/NN/KNN models
+
+# obtain new numeric features (after all the processes above)
+numeric.data <- train.data.2[, sapply(train.data.2, is.numeric)]
+
+# get pca result
+pca_result <- prcomp(numeric.data, center = TRUE, scale. = FALSE)
+# summary(pca_result)
+
+# -------------------------------------------------------------------------------
+
+plot(pca_result, type = "l", main = "Scree Plot: Variance Explained by Each Principal Component")
+# first principal component (PC1) explains a significantly larger portion of the variance
+```
+
+```{r}
+# check variable loading of PC 1,2,3，4
+# they explain most of the variance before the scree plot flattens.
+loadings <- round(pca_result$rotation[, 1:4], 3)
+
+# get all vars with loadings < 0.01 (low contribution)
+low.contrib.vars <- rownames(loadings)[apply(abs(loadings) < 0.01, 1, all)]
+
+cat("Low-contribution variables (loading < 0.01 across PC1–PC4):\n")
+print(low.contrib.vars)
+
+# remove vars with low contribution (loading near 0) 
+# to reduce dimensionality without significant information loss
+train.data.2 <- train.data.2[, !(names(train.data.2) %in% low.contrib.vars)]
+test.data.2  <- test.data.2[, !(names(test.data.2) %in% low.contrib.vars)]
+
+# -------------------------------------------------------------------------------
+
+# check if columns are in identical order
+identical(names(train.data.2), names(test.data.2))
+dim(train.data.2)
+dim(test.data.2)
+
+# -------------------------------------------------------------------------------
+# new pca result
+pca_result <- prcomp(train.data.2[, sapply(train.data.2, is.numeric)],
+                     center = TRUE, 
+                     scale. = FALSE)
+
+
+# remove temp variables
+rm(numeric.data, loadings, low.contrib.vars)
+```
+
+
+
+###
+Optional: PCA datasets for modeling(if implementing)
+```{r}
+# -> remove all categorical variables
+# -> scaling
+# train.data.3 <- train.data[, sapply(train.data, is.numeric)]
+# train.data.3 <- scale(train.data.3)
+```
+
+
+*** remember to optimize model parameters***
+
+### model 1: multiple linear model -> Thomas
+```{r}
+### while testing, do not only run this code chunk, 
+###clear the environment & run from the beginning
+
+# Convert income column to **numeric**
+train.data.2$income <- as.numeric(ifelse(train.data.2$income == ">50K",1,0))
+test.data.2$income <- as.numeric(ifelse(test.data.2$income == ">50K",1,0))
+
+# -------------------------------------------------------------------------------
+
+#fit mlr
+mlr_model <- lm(income ~ ., data = train.data.2)
+#prediction
+pred_mlr <- predict(mlr_model, test.data.2)
+
+# find y and y_hat
+y <- test.data.2$income
+yhat <- pred_mlr
+
+# -------------------------------------------------------------------------------
+# Predict class
+yhat_binary <- ifelse(pred_mlr > 0.5, 1, 0)
+
+# MSE
+mse_mlr <- mean((y - yhat)^2)
+print(paste("MLR MSE:", mse_mlr))
+
+# Accuracy
+accuracy_mlr <- mean(y == yhat_binary)
+print(paste("MLR Accuracy:", accuracy_mlr))
+cat("\n")
+
+# -------------------------------------------------------------------------------
+cm_mlr <- confusionMatrix(factor(yhat_binary), factor(y), positive = "1")
+cm_mlr
+
+# remove temp variables
+rm(y, yhat, yhat_binary, mse_mlr, accuracy_mlr, pred_mlr)
+```
+
+
+### model 2: logistic model -> Zian
+```{r}
+# build full model
+lr_model0 <- glm(income~. , data = train.data.2, family = binomial)
+# summary(lr_model0)
+# race, sex_Male, occupation_Craft-repair seemed to be not significant
+
+# step-wise variable selection, both direction
+suppressWarnings({
+  lr_model <- stepAIC(lr_model0, k = log(nrow(train.data.2)), trace = 0, direction = "both")
+})
+summary(lr_model)
+```
+
+```{r}
+# predict test data, obtain confusion matrix
+probs <- lr_model %>% predict(newdata = test.data.2, type = "response")
+pred.income <- ifelse(probs > 0.5,  1, 0)
+
+confusionMatrix(factor(pred.income), factor(test.data.2$income), positive = "1")
+```
+
+```{r}
+y_true <- test.data.2$income
+y_pred <- pred.income
+y_prob <- probs
+
+# AUC
+roc_obj <- roc(y_true, y_prob)
+auc_val <- auc(roc_obj)
+cat("AUC:", auc_val, "\n")
+
+# precision
+precision <- posPredValue(factor(y_pred), factor(y_true), positive = "1")
+cat("precision:", precision, "\n")
+# F1 score
+recall <- sensitivity(factor(y_pred), factor(y_true), positive = "1")
+cat("recall/sensitivity:", recall, "\n")
+f1_score <- 2 * precision * recall / (precision + recall)
+cat("F1 Score:", f1_score, "\n")
+
+
+rm(y_true, y_pred, y_prob, roc_obj, probs, pred.income)
+```
+
+
+### model 3: NN model -> Tasfia
+After fitting neural network model with reduced features, I found that full model without any feature selection has the highest accuracy.
+``` {r}
+# Find the best paramater for size and decay
+grid_full <- expand.grid(size = c(5, 7, 9, 11), decay = c(0.0001, 0.001, 0.01, 0.05, 0.1, 0.2))
+
+train.data.2$income <- as.factor(train.data.2$income)
+
+set.seed(123)
+nn_model_full_tuned <- train(
+  income ~ ., 
+  data = train.data.2,
+  method = "nnet",
+  tuneGrid = grid_full,
+  trControl = trainControl(method = "cv", number = 10),
+  maxit = 300,
+  trace = FALSE
+)
+
+# View best parameters
+nn_model_full_tuned$bestTune
+nn_model_full_tuned$results[order(-nn_model_full_tuned$results$Accuracy), ]
+```
+
+``` {r}
+# Neural Network Full Model (includes all predictors) from nnet package
+train.data.2$income <- factor(train.data.2$income, levels = c("0", "1"))
+test.data.2$income <- factor(test.data.2$income, levels = c("0", "1"))
+
+set.seed(123)
+nn_model_full <- nnet(
+  income ~ ., 
+  data = train.data.2,
+  size = 7,
+  decay = 0.2,
+  maxit = 300,
+  trace = FALSE
+)
+
+plotnet(nn_model_full)
+
+nn_pred_full <- predict(nn_model_full, newdata = test.data.2, type = "class")
+nn_pred_full <- factor(nn_pred_full, levels = c("0", "1"))
+
+cm_full <- confusionMatrix(
+  data = nn_pred_full,
+  reference = test.data.2$income,
+  positive = "1"
+)
+
+cm_full
+```
+
+``` {r}
+# Neural Network from caret package
+set.seed(123)
+
+nn_model_full <- train(
+  income ~ .,
+  data = train.data.2,
+  method = "nnet",
+  tuneGrid = data.frame(size = 7, decay = 0.2),
+  maxit = 300,
+  trace = FALSE
+)
+
+nn_pred_full <- predict(nn_model_full, newdata = test.data.2, type = "raw")
+nn_pred_full <- factor(nn_pred_full, levels = c("0", "1"))
+
+cm_full <- confusionMatrix(
+  data = nn_pred_full,
+  reference = test.data.2$income,
+  positive = "1"
+)
+
+cm_full
+```
+
+### model 4: CART model -> Nicole
+```{r}
+# feature selection
+cart_model <- rpart(income ~ ., data = train.data.1, control=rpart.control(cp=0), method = "class")
+importance <- as.data.frame(cart_model$variable.importance)
+print(importance)
+```
+
+```{r}
+# prune
+# printcp(modelCART) 
+
+best_cp <- cart_model$cptable[which.min(cart_model$cptable[,"xerror"]),"CP"]
+pruned_model <- prune(cart_model, cp = best_cp)
+
+fancyRpartPlot(pruned_model)
+```
+
+```{r}
+# helper function - compare model performances
+comparemodels <- function(model1, model2, test_data, target_col) {
+  preds1 <- predict(model1, test_data, type = "class")
+  preds2 <- predict(model2, test_data, type = "class")
+
+  actuals <- test_data[[target_col]]
+
+  cm1 <- confusionMatrix(preds1, actuals, positive = levels(actuals)[2])
+  cm2 <- confusionMatrix(preds2, actuals, positive = levels(actuals)[2])
+
+  metrics <- data.frame(
+    Model = c("Model 1", "Model 2"),
+    Accuracy = c(cm1$overall["Accuracy"], cm2$overall["Accuracy"]),
+    Sensitivity = c(cm1$byClass["Sensitivity"], cm2$byClass["Sensitivity"]),
+    Specificity = c(cm1$byClass["Specificity"], cm2$byClass["Specificity"])
+  )
+  return(metrics)
+}
+
+comparemodels(cart_model, pruned_model, test.data.1, 'income')
+```
+
+
+```{r}
+# pruned model is better, now lets remove unimportant variables
+test.data.1a <- subset(test.data.1, select = -c(race, native.country))
+train.data.1a <- subset(train.data.1, select = -c(race, native.country))
+
+cart_model_a <- rpart(income ~ ., data = train.data.1a, control=rpart.control(cp=0), method = "class")
+best_cp <- cart_model_a$cptable[which.min(cart_model$cptable[,"xerror"]),"CP"]
+pruned_model_a <- prune(cart_model_a, cp = best_cp)
+comparemodels(cart_model_a, pruned_model_a, test.data.1, 'income')
+
+# -------------------------------------------------------------------------------
+
+preds <- predict(pruned_model_a, test.data.1, type = "class")
+confusionMatrix(preds, test.data.1$income, positive = ">50K")
+
+# -------------------------------------------------------------------------------
+
+rm(test.data.1a, train.data.1a)
+```
+
+
+
+### model 5: random forest model -> Tasfia
+```{r}
+# Fitting Random Forest Model before feature selection:
+set.seed(123)
+rf_model <- randomForest(income ~ ., data = train.data.1, importance = TRUE, ntree = 500)
+
+# Predictions on training data
+test_preds <- predict(rf_model, newdata = test.data.1)
+
+# Confusion matrix
+cm <- confusionMatrix(test_preds, test.data.1$income, positive = ">50K")
+cm
+```
+
+Feature importance scores using random forest:
+```{r}
+# Extract importance scores
+importance_df <- as.data.frame(rf_model$importance)
+
+# Add variable names as columns
+importance_df$Variable <- rownames(importance_df)
+
+# Reorder columns
+importance_df <- importance_df[, c("Variable", "MeanDecreaseAccuracy", "MeanDecreaseGini")]
+
+# Sort by MeanDecreaseGini (most commonly used)
+importance_df <- importance_df[order(-importance_df$MeanDecreaseGini), ]
+importance_df
+
+# Plot variable importance
+varImpPlot(rf_model, 
+           main = "Random Forest Variable Importance (All Features)")
+```
+
+Random Forest with Reduced Features: --> don't need anymore
+```{r}
+# train.rf.reduced <- subset(train.data.1, select = -c(sex))
+
+# set.seed(123)
+# rf_reduced <- randomForest(income ~ ., 
+#                            data = train.rf.reduced, 
+#                           ntree = 500, 
+#                           importance = TRUE)
+
+#rf_reduced$importance
+
+# Plot variable importance
+#varImpPlot(rf_reduced, 
+#           main = "Random Forest Variable Importance (Reduced Features)")
+```
+
+Confusion Matrix for RF w/ reduced features:
+```{r}
+#test.rf.reduced <- subset(test.data.1, select = -c(sex))
+
+#preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
+
+#cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
+#cm
+```
+
+
+
+
+### model 6: extra models, PCA, KNN... -> decide latter
+
+### explore XgBoost classification --> Thomas
+
+
+
+
+
+```{r}
+# check for data imbalance
+table(train.data$income)
+prop.table(table(train.data$income))
+# somewhat imbalanced
+```
+
+### ***if model predicts income>50K poorly, try handle imbalance***
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
