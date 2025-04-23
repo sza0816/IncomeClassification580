@@ -41,10 +41,7 @@ train.data <- na.omit(train.data)
 # factorize char columns
 
 # remove fnlwgt
-
 train.data <- subset(train.data, select = -c(fnlwgt))
-
-# ***if needed, encoding char cells instead of factorizing them***
 
 train.data[] <- lapply(train.data, 
                        function(x) {
@@ -68,11 +65,9 @@ test.data <-read.csv("test.csv",
 test.data <- na.omit(test.data)
 
 # remove fnlwgt
-
 test.data <- subset(test.data, select = -c(fnlwgt))
 
 # remove empty space in front of each char cell
-# ***if needed, factorize/encode char cells***
 test.data[] <- lapply(test.data, 
                        function(x) {
                          if(is.character(x)) 
@@ -123,6 +118,8 @@ outlier.indices <- which(apply(abs(z.scores), 1, function(x) any(x>3)))
 outliers <- numeric_data[outlier.indices, ]
 str(outliers)
 
+
+rm(z.scores, outlier.indices, outliers)
 ```
 
 
@@ -154,10 +151,11 @@ mv.outliers <- numeric_data[which(dists > threshold), ]
 str(mv.outliers)
 
 
+rm(numeric_data, dists, threshold, mv.outliers)
 ```
 
-IQR method to remove outliers for column hours.per.week
 
+IQR method to remove outliers for column hours.per.week  --> lowered model accuracy, withdraw
 ```{r}
 # Q1 <- quantile(train.data$hours.per.week, 0.25, na.rm = TRUE)
 # Q3 <- quantile(train.data$hours.per.week, 0.75, na.rm = TRUE)
@@ -171,7 +169,6 @@ IQR method to remove outliers for column hours.per.week
 
 
 Testing log transform -- Doesn't seem to help
-
 ```{r}
 log.captial.gain <- log(train.data$capital.gain + 1)
 log.captial.loss <- log(train.data$capital.gain + 1)
@@ -199,8 +196,8 @@ test.has.loss <- as.factor(ifelse(test.data$capital.loss > 0, 1, 0))
 correlation analysis-> Tasfia
 ```{r}
 # Subset only numeric predictors
-#numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
-#numeric_data <- train.data[, numeric_vars]
+numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
+numeric_data <- train.data[, numeric_vars]
 
 # Compute correlation matrix
 cor_matrix <- cor(numeric_data)
@@ -253,6 +250,9 @@ corrplot(cramer_mat,
          na.label = " ",
          addCoef.col = "black",
          number.cex = 0.6)
+
+
+rm(cat_vars, cramers_v_df, cramer_mat)
 ```
 
 
@@ -549,7 +549,7 @@ rm(y_true, y_pred, y_prob, roc_obj, probs, pred.income)
 
 
 ### model 3: NN model -> Tasfia
-data scaling
+income still as numeric
 
 
 
@@ -654,36 +654,38 @@ varImpPlot(rf_model,
 Random Forest with Reduced Features: --> don't need anymore
 ```{r}
 # train.rf.reduced <- subset(train.data.1, select = -c(sex))
-
+# 
 # set.seed(123)
-# rf_reduced <- randomForest(income ~ ., 
-#                            data = train.rf.reduced, 
-#                           ntree = 500, 
+# rf_reduced <- randomForest(income ~ .,
+#                            data = train.rf.reduced,
+#                           ntree = 500,
 #                           importance = TRUE)
-
-#rf_reduced$importance
-
-# Plot variable importance
-#varImpPlot(rf_reduced, 
-#           main = "Random Forest Variable Importance (Reduced Features)")
+# 
+# rf_reduced$importance
+# 
+# # Plot variable importance
+# varImpPlot(rf_reduced,
+#            main = "Random Forest Variable Importance (Reduced Features)")
 ```
 
 Confusion Matrix for RF w/ reduced features:
 ```{r}
-#test.rf.reduced <- subset(test.data.1, select = -c(sex))
+# test.rf.reduced <- subset(test.data.1, select = -c(sex))
+# 
+# preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
+# 
+# cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
+# cm
 
-#preds_reduced <- predict(rf_reduced, newdata = test.rf.reduced)
-
-#cm <- confusionMatrix(preds_reduced, test.data.1$income, positive = ">50K")
-#cm
+# Accuracy : 0.862  
+# Sensitivity : 0.6604
+# Specificity : 0.9282
 ```
 
 
 
 
-### model 6: extra models, PCA, KNN... -> decide latter
-
-### explore XgBoost classification --> Thomas
+### model 6: extra model, XgBoost classification --> Thomas
 
 
 
