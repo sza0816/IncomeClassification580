@@ -25,6 +25,7 @@ library(vcd)
 library(rpart)
 library(rattle)
 library(partykit)
+library(NeuralNetTools) # for neural net plots
 ```
 
 
@@ -446,8 +447,7 @@ rm(numeric.data, loadings, low.contrib.vars)
 
 
 
-###
-Optional: PCA datasets for modeling(if implementing)
+### Optional: PCA datasets for modeling(if implementing)
 ```{r}
 # -> remove all categorical variables
 # -> scaling
@@ -547,7 +547,99 @@ rm(y_true, y_pred, y_prob, roc_obj, probs, pred.income)
 
 
 ### model 3: NN model -> Tasfia
-income still as numeric
+
+After fitting neural network model with reduced features, I found that full model without any feature selection has the highest accuracy.
+
+```{r}
+# Find the best parameter for size and decay
+grid_full <- expand.grid(size = c(5, 7, 9, 11), decay = c(0.0001, 0.001, 0.01, 0.05, 0.1, 0.2))
+
+# convert training target to factor
+train.data.2$income <- as.factor(train.data.2$income)
+
+
+set.seed(123)
+nn_model_full_tuned <- train(
+  income ~ ., 
+  data = train.data.2,
+  method = "nnet",
+  tuneGrid = grid_full,
+  trControl = trainControl(method = "cv", number = 10),
+  maxit = 300,
+  trace = FALSE
+)
+
+# View best parameters
+nn_model_full_tuned$bestTune
+nn_model_full_tuned$results[order(-nn_model_full_tuned$results$Accuracy), ]
+```
+
+
+
+```{r}
+# Neural Network Full Model (includes all predictors) from nnet package
+train.data.2$income <- factor(train.data.2$income, levels = c("0", "1"))
+test.data.2$income <- factor(test.data.2$income, levels = c("0", "1"))
+
+# build model
+set.seed(123)
+nn_model_full <- nnet(
+  income ~ ., 
+  data = train.data.2,
+  size = 7,
+  decay = 0.2,
+  maxit = 300,
+  trace = FALSE
+)
+# plot full model
+plotnet(nn_model_full)
+
+# predictions
+nn_pred_full <- predict(nn_model_full, newdata = test.data.2, type = "class")
+nn_pred_full <- factor(nn_pred_full, levels = c("0", "1"))
+
+# confusion matrix
+cm_full <- confusionMatrix(data = nn_pred_full,reference = test.data.2$income,
+            positive = "1")
+cm_full
+
+# Accuracy : 0.8396
+# Sensitivity : 0.5965
+# Specificity : 0.9194
+```
+
+
+```{r}
+# Neural Network from caret package
+# set.seed(123)
+
+# build model
+# nn_model_full <- train(
+#   income ~ .,
+#   data = train.data.2,
+#   method = "nnet",
+#   tuneGrid = data.frame(size = 7, decay = 0.2),
+#   maxit = 300,
+#   trace = FALSE
+# )
+
+# predictions
+# nn_pred_full <- predict(nn_model_full, newdata = test.data.2, type = "raw")
+# nn_pred_full <- factor(nn_pred_full, levels = c("0", "1"))
+
+# confusion matrix
+# cm_full <- confusionMatrix(
+#   data = nn_pred_full,
+#   reference = test.data.2$income,
+#   positive = "1"
+# )
+# cm_full
+
+# Accuracy : 0.8394
+# Sensitivity : 0.6005
+# Specificity : 0.9178 
+```
+
 
 
 
