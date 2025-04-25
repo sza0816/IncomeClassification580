@@ -85,9 +85,7 @@ test.data$native.country <- factor(test.data$native.country,
 
 ### variable selection, identify important features
 
-outliers -> Matthew
-
-
+outliers
 ```{r}
 # Start with box plots to visualize which variables have outliers
 numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
@@ -194,7 +192,7 @@ test.has.loss <- as.factor(ifelse(test.data$capital.loss > 0, 1, 0))
 ```
 
 
-correlation analysis-> Tasfia
+correlation analysis
 ```{r}
 # Subset only numeric predictors
 numeric_vars <- names(train.data)[sapply(train.data, is.numeric)]
@@ -221,7 +219,7 @@ rm(numeric_vars, numeric_data, cor_matrix)
 ```
 
 
-Correlation Matrix for Categorical Variables (just testing this out): -> Tasfia
+Correlation Matrix for Categorical Variables (just testing this out):
 ```{r}
 # Select categorical columns
 cat_vars <- train.data[, sapply(train.data, is.factor)]
@@ -257,7 +255,7 @@ rm(cat_vars, cramers_v_df, cramer_mat)
 ```
 
 
-Variance Thresholding -> Zian
+Variance Thresholding
 ```{r}
 # get all numeric features
 numeric.data <- train.data[, sapply(train.data, is.numeric)]
@@ -393,7 +391,7 @@ rm(scaled_data, low.var.cols, nzv)
 ```
 
 
-### PCA test for variable importance, only on train.data.2 -> Zian
+### PCA test for variable importance, only on train.data.2
 ```{r}
 # reason: all vars are numeric, either dummy or continuous, and is standardized 
 # for building Linear/Logistic/NN/KNN models
@@ -412,7 +410,7 @@ plot(pca_result, type = "l", main = "Scree Plot: Variance Explained by Each Prin
 ```
 
 ```{r}
-# check variable loading of PC 1,2,3，4
+# check variable loading of PC 1,2,3, 4
 # they explain most of the variance before the scree plot flattens.
 loadings <- round(pca_result$rotation[, 1:4], 3)
 
@@ -458,7 +456,7 @@ rm(numeric.data, loadings, low.contrib.vars)
 
 *** remember to optimize model parameters***
 
-### model 1: multiple linear model -> Thomas
+### model 1: multiple linear model
 ```{r}
 ### while testing, do not only run this code chunk, 
 ###clear the environment & run from the beginning
@@ -500,7 +498,7 @@ rm(y, yhat, yhat_binary, mse_mlr, accuracy_mlr, pred_mlr)
 ```
 
 
-### model 2: logistic model -> Zian
+### model 2: logistic model
 ```{r}
 # build full model
 lr_model0 <- glm(income~. , data = train.data.2, family = binomial)
@@ -546,32 +544,39 @@ rm(y_true, y_pred, y_prob, roc_obj, probs, pred.income)
 ```
 
 
-### model 3: NN model -> Tasfia
+### model 3: NN model
 
 After fitting neural network model with reduced features, I found that full model without any feature selection has the highest accuracy.
 
 ```{r}
+#***NOTE*** We commented this chunk out after getting the bestTune results since
+# it takes at least 30 min to run while knitting 
+
+
 # Find the best parameter for size and decay
-grid_full <- expand.grid(size = c(5, 7, 9, 11), decay = c(0.0001, 0.001, 0.01, 0.05, 0.1, 0.2))
+# grid_full <- expand.grid(size = c(5, 7, 9, 11), decay = c(0.0001, 0.001, 0.01, 0.05, 0.1, 0.2))
 
 # convert training target to factor
-train.data.2$income <- as.factor(train.data.2$income)
-
-
-set.seed(123)
-nn_model_full_tuned <- train(
-  income ~ ., 
-  data = train.data.2,
-  method = "nnet",
-  tuneGrid = grid_full,
-  trControl = trainControl(method = "cv", number = 10),
-  maxit = 300,
-  trace = FALSE
-)
+# train.data.2$income <- as.factor(train.data.2$income)
+# 
+# 
+# set.seed(123)
+# nn_model_full_tuned <- train(
+#   income ~ ., 
+#   data = train.data.2,
+#   method = "nnet",
+#   tuneGrid = grid_full,
+#   trControl = trainControl(method = "cv", number = 10),
+#   maxit = 300,
+#   trace = FALSE
+# )
 
 # View best parameters
-nn_model_full_tuned$bestTune
-nn_model_full_tuned$results[order(-nn_model_full_tuned$results$Accuracy), ]
+# nn_model_full_tuned$bestTune
+# nn_model_full_tuned$results[order(-nn_model_full_tuned$results$Accuracy), ]
+
+# size = 7
+# decay = 0.2
 ```
 
 
@@ -643,7 +648,7 @@ cm_full
 
 
 
-### model 4: CART model -> Nicole
+### model 4: CART model
 ```{r}
 # feature selection
 cart_model <- rpart(income ~ ., data = train.data.1, control=rpart.control(cp=0), method = "class")
@@ -707,7 +712,7 @@ rm(test.data.1a, train.data.1a)
 
 
 
-### model 5: random forest model -> Tasfia
+### model 5: random forest model
 ```{r}
 # Fitting Random Forest Model before feature selection:
 set.seed(123)
@@ -740,6 +745,7 @@ importance_df
 varImpPlot(rf_model, 
            main = "Random Forest Variable Importance (All Features)")
 ```
+
 
 Random Forest with Reduced Features: --> don't need anymore
 ```{r}
@@ -775,7 +781,7 @@ Confusion Matrix for RF w/ reduced features:
 
 
 
-### model 6: extra model, XgBoost classification --> Thomas
+### model 6: extra model, XgBoost classification
 
 
 #### Without Dealing with Imbalance
